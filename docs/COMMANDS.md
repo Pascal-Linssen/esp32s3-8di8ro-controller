@@ -28,6 +28,28 @@ testpins
 ```
 Teste différentes combinaisons de pins SDA/SCL pour trouver la configuration optimale
 
+## Contrôle MQTT
+
+### Format JSON (recommandé)
+Topic: `esp32s3/relay/cmd`
+```json
+{"relay": 1, "state": "on"}
+{"relay": 1, "state": "off"}
+```
+
+### Format Simple
+Topic: `esp32s3/relay/cmd`
+```
+1:ON
+1:OFF
+ALL:OFF
+```
+
+### Topics de Status
+- `esp32s3/sensor` - Température, humidité, entrées
+- `esp32s3/relay/status` - État de tous les relais
+- `esp32s3/relay/1/status` - État relais individuel
+
 ## Contrôle des Relais
 
 ### Activer un Relais
@@ -53,8 +75,16 @@ relay 8 off
 ```
 testio
 ```
-- Affiche l'état de toutes les entrées digitales
+- Affiche l'état de toutes les entrées digitales (0 = inactif, 1 = activé)
 - Teste séquentiellement tous les relais (si TCA9554 OK)
+
+### Test Diagnostic MQTT
+```
+mqtttest
+```
+- Affiche l'état de connexion MQTT
+- Vérifie broker et souscriptions
+- Code d'erreur client MQTT
 
 ### Configuration des Pins
 ```

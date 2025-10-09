@@ -10,12 +10,15 @@ Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec Ethernet, 
 - **🌐 Ethernet W5500** avec IP statique (192.168.1.50)
 - **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41)
 - **📥 8 Entrées digitales** avec pull-up (pins 4-11)
-- **📡 Interface MQTT** pour domotique/IoT
-- **💻 Interface Web responsive** (http://192.168.1.50)
+- **📡 Interface MQTT** pour domotique/IoT avec authentification
 - **🔧 Interface série interactive** avec commandes complètes
-- **⚡ API REST** pour intégration externe
 - **🌡️ Capteur DHT22** température/humidité (pin 40)
 - **🛠️ Système de diagnostic** avancé
+
+### 🔄 En Attente
+- **💻 Interface Web responsive** (développement suspendu)
+- **⚡ API REST** pour intégration externe (développement suspendu)
+- **🏭 Modbus TCP** pour intégration industrielle (développement suspendu)
 
 ## 🎮 Commandes Disponibles
 
@@ -48,10 +51,6 @@ relay X off - Désactive le relais X (1-8)
   - `esp32s3/sensor` - Données capteurs
   - `esp32s3/status` - État système
 
-### API REST
-- **Basculer relais** : `http://192.168.1.50/relay?num=1&action=toggle`
-- **Basculer tous** : `http://192.168.1.50/relay?action=all_toggle`
-
 ## 📌 Configuration Pins
 
 ### Ethernet W5500
@@ -70,9 +69,6 @@ relay X off - Désactive le relais X (1-8)
 
 ### DHT22
 - Data: Pin 40
-
-### DHT22
-- Data: Pin 12
 
 ## 🚀 Installation
 
@@ -110,19 +106,13 @@ platformio device monitor --port COM8 --baud 9600
 2. **Test des relais** : `relay 1 on`, `relay 1 off`
 3. **État système** : `status`
 4. **Diagnostic I2C** : `scan`
-5. **Modbus TCP** : `modbus` pour la configuration
+5. **Contrôle MQTT** : Topics `esp32s3/relay/cmd`
 
-### Contrôle Modbus TCP
-```python
-# Python avec pymodbus
-from pymodbus.client.sync import ModbusTcpClient
-client = ModbusTcpClient('192.168.1.50', port=502)
-
-# Activer relais 1
-client.write_coil(0, True)
-
-# Lire entrées
-inputs = client.read_discrete_inputs(10000, 8)
+### Contrôle MQTT
+```bash
+# Avec Mosquitto clients
+mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "1:ON"
+mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "ALL:OFF"
 ```
 
 ## 🔍 Diagnostic

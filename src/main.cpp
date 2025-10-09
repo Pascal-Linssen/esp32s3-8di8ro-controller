@@ -111,7 +111,8 @@ void setRelay(int relay, bool state) {
 
 void readInputs() {
   for (int i = 0; i < 8; i++) {
-    inputStates[i] = digitalRead(digitalInputs[i]);
+    // INPUT_PULLUP: logique inversée (0 = activé, 1 = inactif)
+    inputStates[i] = !digitalRead(digitalInputs[i]);
   }
 }
 
@@ -209,31 +210,71 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     message += (char)payload[i];
   }
   
-  Serial.printf("MQTT reçu: %s = %s\n", topic, message.c_str());
+  Serial.printf("🔥 MQTT REÇU: Topic='%s' Message='%s'\n", topic, message.c_str());
   
   if (String(topic) == TOPIC_RELAY_CMD) {
-    // Format attendu: "1:ON" ou "1:OFF" ou "ALL:OFF"
-    int colonIndex = message.indexOf(':');
-    if (colonIndex > 0) {
-      String relayStr = message.substring(0, colonIndex);
-      String stateStr = message.substring(colonIndex + 1);
+    Serial.println("📡 Traitement commande relais...");
+    
+    // Vérifier si c'est du JSON ou format simple
+    if (message.startsWith("{")) {
+      // Format JSON: {"relay": 1, "state": "on"}
+      DynamicJsonDocument doc(200);
+      DeserializationError error = deserializeJson(doc, message);
       
-      if (relayStr == "ALL") {
-        bool state = (stateStr == "ON");
-        for (int i = 0; i < 8; i++) {
-          setRelay(i, state);
-        }
-        Serial.printf("MQTT: Tous les relais %s\n", state ? "ON" : "OFF");
-      } else {
-        int relayNum = relayStr.toInt();
-        if (relayNum >= 1 && relayNum <= 8) {
-          bool state = (stateStr == "ON");
-          setRelay(relayNum - 1, state);
-          Serial.printf("MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
-        }
+      if (error) {
+        Serial.printf("❌ Erreur parsing JSON: %s\n", error.c_str());
+        return;
       }
-      publishRelayStates();
+      
+      int relayNum = doc["relay"];
+      String stateStr = doc["state"];
+      
+      Serial.printf("   JSON - Relais: %d, État: '%s'\n", relayNum, stateStr.c_str());
+      
+      if (relayNum >= 1 && relayNum <= 8) {
+        bool state = (stateStr == "on");
+        Serial.printf("🎯 Exécution: setRelay(%d, %s)\n", relayNum - 1, state ? "true" : "false");
+        setRelay(relayNum - 1, state);
+        Serial.printf("✅ MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
+        publishRelayStates();
+      } else {
+        Serial.printf("❌ Numéro relais invalide: %d\n", relayNum);
+      }
+    } else {
+      // Format simple: "1:ON" ou "1:OFF"
+      int colonIndex = message.indexOf(':');
+      if (colonIndex > 0) {
+        String relayStr = message.substring(0, colonIndex);
+        String stateStr = message.substring(colonIndex + 1);
+        
+        Serial.printf("   Simple - Relais: '%s', État: '%s'\n", relayStr.c_str(), stateStr.c_str());
+        
+        if (relayStr == "ALL") {
+          bool state = (stateStr == "ON");
+          Serial.printf("   Commande TOUS les relais: %s\n", state ? "ON" : "OFF");
+          for (int i = 0; i < 8; i++) {
+            setRelay(i, state);
+          }
+          Serial.printf("MQTT: Tous les relais %s\n", state ? "ON" : "OFF");
+        } else {
+          int relayNum = relayStr.toInt();
+          Serial.printf("   Numéro relais parsé: %d\n", relayNum);
+          if (relayNum >= 1 && relayNum <= 8) {
+            bool state = (stateStr == "ON");
+            Serial.printf("   Commande relais %d: %s\n", relayNum, state ? "ON" : "OFF");
+            setRelay(relayNum - 1, state);
+            Serial.printf("MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
+          } else {
+            Serial.printf("❌ Numéro relais invalide: %d\n", relayNum);
+          }
+        }
+        publishRelayStates();
+      } else {
+        Serial.printf("❌ Format message invalide: %s\n", message.c_str());
+      }
     }
+  } else {
+    Serial.printf("❌ Topic non reconnu: %s\n", topic);
   }
 }
 
@@ -444,6 +485,66 @@ void loop() {
     else if (command == "scan") {
       scanI2C();
     }
+    else if (command == "testio") {
+      Serial.println("\n=== TEST ENTRÉES/SORTIES ===");
+      
+      // Test des entrées
+      readInputs();
+      Serial.println("📥 État des entrées digitales:");
+      for (int i = 0; i < 8; i++) {
+        Serial.printf("  Entrée %d (pin %d): %s\n", i+1, digitalInputs[i], inputStates[i] ? "HIGH" : "LOW");
+      }
+      
+      // Test séquentiel des relais si TCA9554 OK
+      Wire.beginTransmission(TCA9554_ADDR);
+      uint8_t i2cResult = Wire.endTransmission();
+      
+      if (i2cResult == 0) {
+        Serial.println("🔌 Test séquentiel des relais:");
+        for (int i = 0; i < 8; i++) {
+          Serial.printf("  Test relais %d...", i+1);
+          setRelay(i, true);
+          delay(500);
+          setRelay(i, false);
+          delay(200);
+          Serial.println(" OK");
+        }
+        Serial.println("✓ Test relais terminé");
+      } else {
+        Serial.println("❌ TCA9554 inaccessible - relais non testés");
+      }
+      Serial.println("===============================");
+    }
+    else if (command == "mqtttest") {
+      Serial.println("\n=== DIAGNOSTIC MQTT ===");
+      Serial.printf("Broker: %s:%d\n", mqttServer.toString().c_str(), MQTT_PORT);
+      Serial.printf("Client ID: %s\n", MQTT_CLIENT_ID);
+      Serial.printf("User: %s\n", MQTT_USER);
+      Serial.printf("Connecté: %s\n", mqttClient.connected() ? "✓ OUI" : "✗ NON");
+      
+      if (mqttClient.connected()) {
+        Serial.println("📡 Test publication...");
+        bool result = mqttClient.publish("esp32s3/test", "Hello from ESP32");
+        Serial.printf("Publication test: %s\n", result ? "✓ OK" : "✗ ÉCHEC");
+        
+        Serial.println("📡 État abonnements:");
+        Serial.println("  - esp32s3/relay/cmd (souscrit au démarrage)");
+      } else {
+        Serial.printf("Erreur connexion: %d\n", mqttClient.state());
+        Serial.println("Codes erreur MQTT:");
+        Serial.println("  -4: Connection timeout");
+        Serial.println("  -3: Connection lost");
+        Serial.println("  -2: Connect failed");
+        Serial.println("  -1: Disconnected");
+        Serial.println("   0: Connected");
+        Serial.println("   1: Bad protocol");
+        Serial.println("   2: Bad client ID");
+        Serial.println("   3: Unavailable");
+        Serial.println("   4: Bad credentials");
+        Serial.println("   5: Unauthorized");
+      }
+      Serial.println("========================");
+    }
     else if (command == "testrelays") {
       Serial.println("\n=== TEST LOGIQUE RELAIS ===");
       Serial.println("Test 1: Écriture 0x00...");
@@ -479,6 +580,8 @@ void loop() {
       Serial.println("  help           - Cette aide");
       Serial.println("  status         - Status détaillé complet");
       Serial.println("  scan           - Scan I2C des devices");
+      Serial.println("  testio         - Test entrées et relais");
+      Serial.println("  mqtttest       - Diagnostic MQTT détaillé");
       Serial.println("🔌 Contrôle des relais:");
       Serial.println("  relay X on/off - Contrôler relais 1-8");
       Serial.println("  testrelays     - Test logique relais (observer physiquement)");
