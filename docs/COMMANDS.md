@@ -40,7 +40,8 @@ relay 8 on
 
 ### Désactiver un Relais
 ```
-relay 1 off
+relay 1 on
+
 relay 2 off
 ...
 relay 8 off

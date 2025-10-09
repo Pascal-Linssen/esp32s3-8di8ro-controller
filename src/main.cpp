@@ -14,11 +14,11 @@ IPAddress subnet(255, 255, 255, 0);
 IPAddress dns1(8, 8, 8, 8);
 
 // Configuration MQTT
-IPAddress mqttServer(192, 168, 1, 100); // Changez selon votre broker MQTT
+IPAddress mqttServer(192, 168, 1, 200); // Home Assistant Mosquitto broker
 #define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "ESP32S3_8DI8RO"
-#define MQTT_USER ""    // Laissez vide si pas d'auth
-#define MQTT_PASS ""    // Laissez vide si pas d'auth
+#define MQTT_USER "pascal"    // Login MQTT
+#define MQTT_PASS "123456"    // Password MQTT
 
 // Topics MQTT
 #define TOPIC_STATUS "esp32s3/status"
@@ -66,11 +66,11 @@ uint32_t lastMqttReconnect = 0;
 void tca9554_write(uint8_t data) {
   Wire.beginTransmission(TCA9554_ADDR);
   Wire.write(0x01); // Output register
-  Wire.write(~data); // Inversion car les relais sont actifs à LOW
+  Wire.write(data); // ENLEVER L'INVERSION - Test direct
   Wire.endTransmission();
   
   // Debug
-  Serial.printf("TCA9554 écrit: 0x%02X (relais data: 0x%02X)\n", ~data, data);
+  Serial.printf("TCA9554 écrit: 0x%02X (relais data: 0x%02X)\n", data, data);
 }
 
 void tca9554_init() {
@@ -82,11 +82,13 @@ void tca9554_init() {
   
   if (result == 0) {
     Serial.println("✓ TCA9554 communication OK");
-    // Forcer TOUS les relais OFF explicitement pour éviter l'activation au démarrage
-    delay(10); // Petite pause pour stabilité
-    tca9554_write(0x00); // Tous OFF
-    delay(10);
-    tca9554_write(0x00); // Double sécurité
+    // MAINTENANT ON SAIT: 0x00 = relais OFF, 0xFF = relais ON
+    delay(50); // Pause pour stabilité
+    
+    Serial.println("Arrêt définitif de tous les relais...");
+    tca9554_write(0x00); // TOUS OFF avec la bonne valeur
+    delay(100);
+    
     Serial.println("✓ Tous les relais forcés OFF au démarrage");
   } else {
     Serial.printf("❌ TCA9554 erreur communication: %d\n", result);
@@ -99,10 +101,11 @@ void setRelay(int relay, bool state) {
     uint8_t relayData = 0;
     for (int i = 0; i < 8; i++) {
       if (relayStates[i]) {
-        relayData |= (1 << i);
+        relayData |= (1 << i);  // Bit à 1 = relais ON
       }
     }
     tca9554_write(relayData);
+    Serial.printf("Relais %d: %s (données: 0x%02X)\n", relay+1, state ? "ON" : "OFF", relayData);
   }
 }
 
@@ -441,6 +444,35 @@ void loop() {
     else if (command == "scan") {
       scanI2C();
     }
+    else if (command == "testrelays") {
+      Serial.println("\n=== TEST LOGIQUE RELAIS ===");
+      Serial.println("Test 1: Écriture 0x00...");
+      tca9554_write(0x00);
+      delay(2000);
+      Serial.println("Test 2: Écriture 0xFF...");
+      tca9554_write(0xFF);
+      delay(2000);
+      Serial.println("Test 3: Écriture 0x01 (relais 1)...");
+      tca9554_write(0x01);
+      delay(2000);
+      Serial.println("Test 4: Écriture 0xFE (tous sauf relais 1)...");
+      tca9554_write(0xFE);
+      delay(2000);
+      Serial.println("Test terminé - observez quand les relais s'activent");
+      Serial.println("=============================");
+    }
+    else if (command == "forceoff") {
+      Serial.println("\n=== FORCE TOUS RELAIS OFF ===");
+      // Reset des états logiciels
+      for (int i = 0; i < 8; i++) {
+        relayStates[i] = false;
+      }
+      // Utiliser la BONNE logique maintenant identifiée
+      Serial.println("Arrêt avec 0x00 (logique confirmée)...");
+      tca9554_write(0x00);
+      Serial.println("✓ Tous les relais arrêtés");
+      Serial.println("==============================");
+    }
     else if (command == "help") {
       Serial.println("\n=== COMMANDES DISPONIBLES ===");
       Serial.println("📋 Informations:");
@@ -449,6 +481,8 @@ void loop() {
       Serial.println("  scan           - Scan I2C des devices");
       Serial.println("🔌 Contrôle des relais:");
       Serial.println("  relay X on/off - Contrôler relais 1-8");
+      Serial.println("  testrelays     - Test logique relais (observer physiquement)");
+      Serial.println("  forceoff       - Force arrêt tous relais");
       Serial.println("🌐 Accès réseau:");
       Serial.println("  Interface web: http://" + Ethernet.localIP().toString());
       Serial.println("  MQTT: " + mqttServer.toString() + ":" + String(MQTT_PORT));
