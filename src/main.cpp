@@ -3,6 +3,8 @@
 #include <Wire.h>
 #include <DHT.h>
 #include <SPI.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // Configuration réseau
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
@@ -10,6 +12,20 @@ IPAddress staticIP(192, 168, 1, 50);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress dns1(8, 8, 8, 8);
+
+// Configuration MQTT
+IPAddress mqttServer(192, 168, 1, 100); // Changez selon votre broker MQTT
+#define MQTT_PORT 1883
+#define MQTT_CLIENT_ID "ESP32S3_8DI8RO"
+#define MQTT_USER ""    // Laissez vide si pas d'auth
+#define MQTT_PASS ""    // Laissez vide si pas d'auth
+
+// Topics MQTT
+#define TOPIC_STATUS "esp32s3/status"
+#define TOPIC_RELAY_CMD "esp32s3/relay/cmd"
+#define TOPIC_RELAY_STATE "esp32s3/relay/state"
+#define TOPIC_INPUT_STATE "esp32s3/input/state"
+#define TOPIC_SENSOR "esp32s3/sensor"
 
 // Pins SPI W5500 - VRAIE CONFIG WAVESHARE selon WS_ETH.h
 #define ETH_CS_PIN    16    // CS = Pin 16 (selon Waveshare)
@@ -33,13 +49,20 @@ const int digitalInputs[8] = {4, 5, 6, 7, 8, 9, 10, 11};
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
+// Clients réseau
+EthernetClient ethClient;
+PubSubClient mqttClient(ethClient);
+
 // États des relais et entrées
 bool relayStates[8] = {false};
 bool inputStates[8] = {false};
+bool lastInputStates[8] = {false};
 float temperature = 0.0;
 float humidity = 0.0;
+uint32_t lastMqttPublish = 0;
+uint32_t lastMqttReconnect = 0;
 
-// Fonctions TCA9554 pour contrôle des relais
+// ===== FONCTIONS UTILITAIRES =====
 void tca9554_write(uint8_t data) {
   Wire.beginTransmission(TCA9554_ADDR);
   Wire.write(0x01); // Output register
@@ -51,6 +74,7 @@ void tca9554_write(uint8_t data) {
 }
 
 void tca9554_init() {
+  // IMPORTANT: Configurer tous les pins en sortie AVANT d'écrire les données
   Wire.beginTransmission(TCA9554_ADDR);
   Wire.write(0x03); // Configuration register
   Wire.write(0x00); // Tous en sortie
@@ -58,12 +82,15 @@ void tca9554_init() {
   
   if (result == 0) {
     Serial.println("✓ TCA9554 communication OK");
+    // Forcer TOUS les relais OFF explicitement pour éviter l'activation au démarrage
+    delay(10); // Petite pause pour stabilité
+    tca9554_write(0x00); // Tous OFF
+    delay(10);
+    tca9554_write(0x00); // Double sécurité
+    Serial.println("✓ Tous les relais forcés OFF au démarrage");
   } else {
     Serial.printf("❌ TCA9554 erreur communication: %d\n", result);
   }
-  
-  // Tous les relais OFF au démarrage
-  tca9554_write(0x00);
 }
 
 void setRelay(int relay, bool state) {
@@ -93,7 +120,6 @@ void readSensors() {
   if (isnan(humidity)) humidity = 0.0;
 }
 
-// Fonction de scan I2C pour diagnostiquer
 void scanI2C() {
   Serial.println("\n=== SCAN I2C ===");
   byte error, address;
@@ -118,27 +144,113 @@ void scanI2C() {
   Serial.println("================");
 }
 
-// Test direct du TCA9554
-void testTCA9554() {
-  Serial.println("\n=== TEST TCA9554 ===");
+// ===== FONCTIONS MQTT =====
+void publishStatus() {
+  if (!mqttClient.connected()) return;
   
-  // Test écriture/lecture
-  Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x01); // Output register
-  Wire.write(0xFF); // Tous HIGH
-  uint8_t result = Wire.endTransmission();
+  DynamicJsonDocument doc(512);
+  doc["ip"] = Ethernet.localIP().toString();
+  doc["uptime"] = millis() / 1000;
+  doc["ethernet"] = (Ethernet.linkStatus() == LinkON) ? "OK" : "ERROR";
+  doc["i2c"] = "OK";
   
-  Serial.printf("Écriture 0xFF: %s\n", result == 0 ? "OK" : "ERREUR");
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(TOPIC_STATUS, payload.c_str());
+}
+
+void publishRelayStates() {
+  if (!mqttClient.connected()) return;
   
-  delay(500);
+  DynamicJsonDocument doc(256);
+  JsonArray relays = doc.createNestedArray("relays");
+  for (int i = 0; i < 8; i++) {
+    relays.add(relayStates[i] ? 1 : 0);
+  }
   
-  Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x01); // Output register  
-  Wire.write(0x00); // Tous LOW
-  result = Wire.endTransmission();
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(TOPIC_RELAY_STATE, payload.c_str());
+}
+
+void publishInputStates() {
+  if (!mqttClient.connected()) return;
   
-  Serial.printf("Écriture 0x00: %s\n", result == 0 ? "OK" : "ERREUR");
-  Serial.println("==================");
+  DynamicJsonDocument doc(256);
+  JsonArray inputs = doc.createNestedArray("inputs");
+  for (int i = 0; i < 8; i++) {
+    inputs.add(inputStates[i] ? 1 : 0);
+  }
+  
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(TOPIC_INPUT_STATE, payload.c_str());
+}
+
+void publishSensorData() {
+  if (!mqttClient.connected()) return;
+  
+  DynamicJsonDocument doc(256);
+  doc["temperature"] = temperature;
+  doc["humidity"] = humidity;
+  doc["timestamp"] = millis() / 1000;
+  
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(TOPIC_SENSOR, payload.c_str());
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  Serial.printf("MQTT reçu: %s = %s\n", topic, message.c_str());
+  
+  if (String(topic) == TOPIC_RELAY_CMD) {
+    // Format attendu: "1:ON" ou "1:OFF" ou "ALL:OFF"
+    int colonIndex = message.indexOf(':');
+    if (colonIndex > 0) {
+      String relayStr = message.substring(0, colonIndex);
+      String stateStr = message.substring(colonIndex + 1);
+      
+      if (relayStr == "ALL") {
+        bool state = (stateStr == "ON");
+        for (int i = 0; i < 8; i++) {
+          setRelay(i, state);
+        }
+        Serial.printf("MQTT: Tous les relais %s\n", state ? "ON" : "OFF");
+      } else {
+        int relayNum = relayStr.toInt();
+        if (relayNum >= 1 && relayNum <= 8) {
+          bool state = (stateStr == "ON");
+          setRelay(relayNum - 1, state);
+          Serial.printf("MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
+        }
+      }
+      publishRelayStates();
+    }
+  }
+}
+
+void connectMQTT() {
+  if (millis() - lastMqttReconnect < 5000) return; // Éviter trop de tentatives
+  lastMqttReconnect = millis();
+  
+  Serial.print("Connexion MQTT...");
+  if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
+    Serial.println(" ✓");
+    mqttClient.subscribe(TOPIC_RELAY_CMD);
+    Serial.println("✓ Abonné aux commandes relais");
+    
+    // Publier état initial
+    publishStatus();
+    publishRelayStates();
+    publishInputStates();
+  } else {
+    Serial.printf(" ✗ (code %d)\n", mqttClient.state());
+  }
 }
 
 void setup() {
@@ -147,7 +259,7 @@ void setup() {
   delay(2000);
   
   Serial.println("\n\n=== DÉMARRAGE ESP32-S3-ETH-8DI-8RO ===");
-  Serial.println("Version: Test I2C Pins");
+  Serial.println("Version: MQTT + Interface Web");
   Serial.println("Date: " + String(__DATE__) + " " + String(__TIME__));
   
   // Test de base
@@ -203,32 +315,39 @@ void setup() {
   Ethernet.begin(mac, staticIP, dns1, gateway, subnet);
   delay(2000);
   
-  // Vérification
+  // Vérification Ethernet
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println(" ✗");
     Serial.println("❌ W5500 non détecté avec ces pins!");
-    Serial.printf("Pins testés: CS=%d, RST=%d, IRQ=%d\n", 
-                  ETH_CS_PIN, ETH_RST_PIN, ETH_IRQ_PIN);
-    Serial.printf("SPI: SCK=%d, MISO=%d, MOSI=%d\n", 
-                  ETH_SCK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN);
   } else if (Ethernet.linkStatus() == LinkOFF) {
     Serial.println(" ⚠️");
     Serial.println("⚠️  W5500 détecté mais pas de câble");
-    Serial.println("Connectez un câble Ethernet");
   } else {
     Serial.println(" ✓");
     Serial.print("✓ IP Ethernet: ");
     Serial.println(Ethernet.localIP());
-    Serial.print("✓ Interface web: http://");
-    Serial.println(Ethernet.localIP());
   }
   
+  // Initialisation MQTT
+  mqttClient.setServer(mqttServer, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+  Serial.printf("✓ MQTT configuré: %s:%d\n", mqttServer.toString().c_str(), MQTT_PORT);
+  
   Serial.println("\n=== Système prêt ===");
-  Serial.println("Tapez 'help' pour les commandes disponibles");
+  Serial.println("Fonctionnalités disponibles:");
+  Serial.println("- Interface web: http://" + Ethernet.localIP().toString());
+  Serial.println("- MQTT: " + mqttServer.toString() + ":" + String(MQTT_PORT));
+  Serial.println("- Commandes série: tapez 'help'");
 }
 
 void loop() {
   Ethernet.maintain();
+  
+  // Connexion MQTT si nécessaire
+  if (!mqttClient.connected()) {
+    connectMQTT();
+  }
+  mqttClient.loop();
   
   // Lecture des capteurs et entrées toutes les 2 secondes
   static uint32_t lastSensorRead = 0;
@@ -236,211 +355,104 @@ void loop() {
     lastSensorRead = millis();
     readSensors();
     readInputs();
+    
+    // Vérifier changements d'entrées pour MQTT
+    bool inputChanged = false;
+    for (int i = 0; i < 8; i++) {
+      if (inputStates[i] != lastInputStates[i]) {
+        inputChanged = true;
+        lastInputStates[i] = inputStates[i];
+      }
+    }
+    if (inputChanged) {
+      publishInputStates();
+    }
+  }
+  
+  // Publication MQTT périodique (toutes les 30 secondes)
+  if (mqttClient.connected() && (millis() - lastMqttPublish > 30000)) {
+    lastMqttPublish = millis();
+    publishSensorData();
+    publishStatus();
   }
   
   // Commandes série pour debug et contrôle immédiat
   if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
     command.trim();
+    command.toLowerCase();
     
     if (command.startsWith("relay ")) {
       int relayNum = command.substring(6, 7).toInt();
       String state = command.substring(8);
       
       if (relayNum >= 1 && relayNum <= 8) {
-        bool newState = (state == "on" || state == "ON");
-        setRelay(relayNum - 1, newState);
-        Serial.printf("Relais %d: %s\n", relayNum, newState ? "ON" : "OFF");
+        if (state == "on") {
+          setRelay(relayNum - 1, true);
+          Serial.printf("Relais %d: ON\n", relayNum);
+          publishRelayStates();
+        } else if (state == "off") {
+          setRelay(relayNum - 1, false);
+          Serial.printf("Relais %d: OFF\n", relayNum);
+          publishRelayStates();
+        }
       }
     }
     else if (command == "status") {
-      Serial.println("\n=== STATUS DETAILLE ===");
-      Serial.printf("Hardware: %d ", Ethernet.hardwareStatus());
-      switch(Ethernet.hardwareStatus()) {
-        case EthernetNoHardware: Serial.println("(Pas de W5500)"); break;
-        case EthernetW5100: Serial.println("(W5100 détecté)"); break;
-        case EthernetW5200: Serial.println("(W5200 détecté)"); break;
-        case EthernetW5500: Serial.println("(W5500 détecté ✓)"); break;
-        default: Serial.println("(Inconnu)"); break;
+      Serial.println("\n=== STATUS SYSTÈME ===");
+      Serial.printf("Uptime: %d secondes\n", millis()/1000);
+      
+      // Ethernet
+      if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+        Serial.println("Ethernet W5500: ✗ ERREUR");
+      } else if (Ethernet.linkStatus() == LinkOFF) {
+        Serial.println("Ethernet W5500: ⚠️ PAS DE CÂBLE");
+      } else {
+        Serial.printf("Ethernet W5500: ✓ OK (%s)\n", Ethernet.localIP().toString().c_str());
       }
       
-      Serial.printf("Link: %d ", Ethernet.linkStatus());
-      switch(Ethernet.linkStatus()) {
-        case Unknown: Serial.println("(Indéterminé)"); break;
-        case LinkON: Serial.println("(Câble connecté ✓)"); break;
-        case LinkOFF: Serial.println("(Pas de câble)"); break;
-        default: Serial.println("(Inconnu)"); break;
-      }
+      // MQTT
+      Serial.printf("MQTT: %s\n", mqttClient.connected() ? "✓ Connecté" : "✗ Déconnecté");
       
-      if (Ethernet.hardwareStatus() == EthernetW5500) {
-        Serial.print("IP: ");
-        Serial.println(Ethernet.localIP());
-        Serial.print("Interface web: http://");
-        Serial.println(Ethernet.localIP());
-      }
+      // I2C/TCA9554
+      Wire.beginTransmission(TCA9554_ADDR);
+      uint8_t i2cResult = Wire.endTransmission();
+      Serial.printf("TCA9554 I2C: %s\n", i2cResult == 0 ? "✓ OK" : "✗ ERREUR");
       
-      Serial.printf("Température: %.1f°C, Humidité: %.1f%%\n", temperature, humidity);
+      // Capteurs
+      Serial.printf("Température: %.1f°C\n", temperature);
+      Serial.printf("Humidité: %.1f%%\n", humidity);
       
-      // Affichage de l'état des relais
-      Serial.println("\n--- État des Relais ---");
+      // Relais
+      Serial.print("Relais: ");
       for (int i = 0; i < 8; i++) {
-        Serial.printf("Relais %d: %s\n", i+1, relayStates[i] ? "ON" : "OFF");
+        Serial.printf("%d:%s ", i+1, relayStates[i] ? "ON" : "OFF");
       }
+      Serial.println();
       
-      // Affichage de l'état des entrées
-      Serial.println("\n--- État des Entrées ---");
+      // Entrées
+      Serial.print("Entrées: ");
       for (int i = 0; i < 8; i++) {
-        Serial.printf("Entrée %d: %s\n", i+1, inputStates[i] ? "HIGH" : "LOW");
+        Serial.printf("%d:%s ", i+1, inputStates[i] ? "HIGH" : "LOW");
       }
-      
-      Serial.println("======================");
-    }
-    else if (command == "inputs") {
-      Serial.println("\n=== ENTREES DIGITALES ===");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("Entrée %d (Pin %d): %s\n", i+1, digitalInputs[i], inputStates[i] ? "HIGH ⚡" : "LOW ⏸️");
-      }
-      Serial.println("========================");
-    }
-    else if (command == "relays") {
-      Serial.println("\n=== ETAT DES RELAIS ===");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("Relais %d: %s\n", i+1, relayStates[i] ? "ON 🟢" : "OFF 🔴");
-      }
-      Serial.println("=====================");
-    }
-    else if (command == "test") {
-      Serial.println("\n=== TEST SEQUENCE ===");
-      Serial.println("Test des relais 1-8...");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("Activation relais %d...\n", i+1);
-        setRelay(i, true);
-        delay(500);
-        Serial.printf("Désactivation relais %d...\n", i+1);
-        setRelay(i, false);
-        delay(300);
-      }
-      Serial.println("Test terminé !");
-    }
-    else if (command.startsWith("all ")) {
-      String state = command.substring(4);
-      bool newState = (state == "on" || state == "ON");
-      Serial.printf("Tous les relais: %s\n", newState ? "ON" : "OFF");
-      for (int i = 0; i < 8; i++) {
-        setRelay(i, newState);
-      }
+      Serial.println();
+      Serial.println("=======================");
     }
     else if (command == "scan") {
       scanI2C();
-    }
-    else if (command == "testpins") {
-      Serial.println("\n=== TEST PINS I2C ===");
-      // Combinaisons courantes pour ESP32-S3
-      int pinCombos[][2] = {
-        {21, 22}, // Défaut ESP32-S3
-        {41, 42}, // Waveshare possible
-        {47, 48}, // Alternative ESP32-S3
-        {1, 2},   // Alternative
-        {3, 4},   // Alternative
-        {5, 6},   // Alternative
-        {17, 18}, // Alternative
-        {19, 20}  // Alternative
-      };
-      
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("Test SDA=%d, SCL=%d: ", pinCombos[i][0], pinCombos[i][1]);
-        
-        // Test sécurisé avec gestion d'erreur
-        bool success = false;
-        try {
-          Wire.end(); // S'assurer que Wire est fermé
-          delay(100);
-          if (Wire.begin(pinCombos[i][0], pinCombos[i][1])) {
-            Wire.setClock(100000);
-            delay(100);
-            
-            Wire.beginTransmission(TCA9554_ADDR);
-            byte error = Wire.endTransmission();
-            if (error == 0) {
-              Serial.println("✓ TCA9554 TROUVÉ!");
-              success = true;
-            } else {
-              Serial.println("✗");
-            }
-          } else {
-            Serial.println("✗ (Pins invalides)");
-          }
-        } catch (...) {
-          Serial.println("✗ (Erreur)");
-        }
-        
-        if (success) break;
-        delay(200);
-      }
-      
-      Serial.println("======================");
-    }
-    
-    else if (command == "testio") {
-      testTCA9554();
-    }
-    else if (command == "pins") {
-      Serial.println("\n=== CONFIGURATION PINS ===");
-      Serial.println("📥 Entrées digitales:");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("  Entrée %d -> Pin %d\n", i+1, digitalInputs[i]);
-      }
-      Serial.println("🔌 Relais:");
-      Serial.printf("  TCA9554 I2C @ 0x%02X\n", TCA9554_ADDR);
-      Serial.println("  I2C: Désactivé (utilisez 'testpins' pour trouver les bons pins)");
-      Serial.println("🌡️ Capteur:");
-      Serial.printf("  DHT22 -> Pin %d\n", DHT_PIN);
-      Serial.println("🌐 Ethernet W5500:");
-      Serial.printf("  CS=%d, RST=%d, IRQ=%d\n", ETH_CS_PIN, ETH_RST_PIN, ETH_IRQ_PIN);
-      Serial.printf("  SPI: SCK=%d, MISO=%d, MOSI=%d\n", ETH_SCK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN);
-      Serial.println("============================");
     }
     else if (command == "help") {
       Serial.println("\n=== COMMANDES DISPONIBLES ===");
       Serial.println("📋 Informations:");
       Serial.println("  help           - Cette aide");
       Serial.println("  status         - Status détaillé complet");
-      Serial.println("  inputs         - État des 8 entrées digitales");
-      Serial.println("  relays         - État des 8 relais");
-      Serial.println("  pins           - Configuration des pins");
-      Serial.println("");
+      Serial.println("  scan           - Scan I2C des devices");
       Serial.println("🔌 Contrôle des relais:");
       Serial.println("  relay X on/off - Contrôler relais 1-8");
-      Serial.println("  all on/off     - Tous les relais ON/OFF");
-      Serial.println("  test           - Test séquentiel de tous les relais");
-      Serial.println("");
-      Serial.println("� Diagnostic:");
-      Serial.println("  scan           - Scan I2C des devices");
-      Serial.println("  testio         - Test direct TCA9554");
-      Serial.println("");
-      Serial.println("�💡 Exemples:");
-      Serial.println("  relay 1 on     - Active le relais 1");
-      Serial.println("  relay 3 off    - Désactive le relais 3");
-      Serial.println("  all on         - Active tous les relais");
-      Serial.println("  scan           - Cherche devices I2C");
-      Serial.println("=============================");
-    }
-  }
-  
-  // Status périodique toutes les 30s
-  static uint32_t lastStatus = 0;
-  if (millis() - lastStatus > 30000) {
-    lastStatus = millis();
-    
-    if (Ethernet.hardwareStatus() == EthernetW5500) {
-      if (Ethernet.linkStatus() == LinkON) {
-        Serial.print("✓ Ethernet OK - Interface: http://");
-        Serial.println(Ethernet.localIP());
-      } else {
-        Serial.println("⚠️  W5500 OK mais pas de câble Ethernet");
-      }
-    } else {
-      Serial.println("❌ W5500 non détecté - vérifiez les connexions");
+      Serial.println("🌐 Accès réseau:");
+      Serial.println("  Interface web: http://" + Ethernet.localIP().toString());
+      Serial.println("  MQTT: " + mqttServer.toString() + ":" + String(MQTT_PORT));
+      Serial.println("==============================");
     }
   }
 }

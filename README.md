@@ -2,35 +2,55 @@
 
 ## 📋 Description
 
-Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec interface Ethernet stable et contrôle de 8 relais + 8 entrées digitales.
+Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec Ethernet, MQTT, interface web et contrôle de 8 relais + 8 entrées digitales.
 
 ## ✨ Fonctionnalités
 
 ### ✅ Opérationnelles
-- **8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41)
-- **8 Entrées digitales** avec pull-up (pins 4-11)
-- **Interface série interactive** avec commandes complètes
-- **Système de diagnostic** avancé
-- **Configuration pins Waveshare officiels**
-- **Modbus TCP** pour intégration SCADA/industrielle (port 502)
-
-### 🔧 En développement
-- **Ethernet W5500** (pins configurés, nécessite connexion physique)
-- **Capteur DHT22** température/humidité (pin 12)
+- **🌐 Ethernet W5500** avec IP statique (192.168.1.50)
+- **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41)
+- **📥 8 Entrées digitales** avec pull-up (pins 4-11)
+- **📡 Interface MQTT** pour domotique/IoT
+- **💻 Interface Web responsive** (http://192.168.1.50)
+- **🔧 Interface série interactive** avec commandes complètes
+- **⚡ API REST** pour intégration externe
+- **🌡️ Capteur DHT22** température/humidité (pin 40)
+- **🛠️ Système de diagnostic** avancé
 
 ## 🎮 Commandes Disponibles
 
 ```
 help        - Affiche l'aide complète
-status      - État du système
+status      - État du système complet
 scan        - Scan des périphériques I2C
 testio      - Test des entrées/sorties
 pins        - Informations sur les pins
 testpins    - Test différentes combinaisons I2C
 relay X on  - Active le relais X (1-8)
 relay X off - Désactive le relais X (1-8)
-modbus      - Configuration Modbus TCP
 ```
+
+## 🌐 Interfaces Disponibles
+
+### Interface Web
+- **URL** : http://192.168.1.50
+- **Contrôle visuel** des 8 relais
+- **Monitoring** des 8 entrées digitales
+- **Affichage** température/humidité
+- **Actualisation automatique** toutes les 10s
+
+### MQTT
+- **Broker par défaut** : 192.168.1.100:1883
+- **Topics** :
+  - `esp32s3/relay/cmd` - Commandes relais
+  - `esp32s3/relay/state` - États relais
+  - `esp32s3/input/state` - États entrées
+  - `esp32s3/sensor` - Données capteurs
+  - `esp32s3/status` - État système
+
+### API REST
+- **Basculer relais** : `http://192.168.1.50/relay?num=1&action=toggle`
+- **Basculer tous** : `http://192.168.1.50/relay?action=all_toggle`
 
 ## 📌 Configuration Pins
 
@@ -47,6 +67,9 @@ modbus      - Configuration Modbus TCP
 
 ### Entrées Digitales
 - IN1-8: Pins 4-11
+
+### DHT22
+- Data: Pin 40
 
 ### DHT22
 - Data: Pin 12
