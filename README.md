@@ -12,6 +12,7 @@ Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec interface 
 - **Interface série interactive** avec commandes complètes
 - **Système de diagnostic** avancé
 - **Configuration pins Waveshare officiels**
+- **Modbus TCP** pour intégration SCADA/industrielle (port 502)
 
 ### 🔧 En développement
 - **Ethernet W5500** (pins configurés, nécessite connexion physique)
@@ -28,6 +29,7 @@ pins        - Informations sur les pins
 testpins    - Test différentes combinaisons I2C
 relay X on  - Active le relais X (1-8)
 relay X off - Désactive le relais X (1-8)
+modbus      - Configuration Modbus TCP
 ```
 
 ## 📌 Configuration Pins
@@ -59,6 +61,7 @@ relay X off - Désactive le relais X (1-8)
 - TCA9554 @ 0.1.2+sha.79c8c0b
 - DHT sensor library @ 1.4.6
 - Adafruit Unified Sensor @ 1.1.15
+- modbus-esp32 @ 4.1.0
 ```
 
 ### Configuration PlatformIO
@@ -84,6 +87,20 @@ platformio device monitor --port COM8 --baud 9600
 2. **Test des relais** : `relay 1 on`, `relay 1 off`
 3. **État système** : `status`
 4. **Diagnostic I2C** : `scan`
+5. **Modbus TCP** : `modbus` pour la configuration
+
+### Contrôle Modbus TCP
+```python
+# Python avec pymodbus
+from pymodbus.client.sync import ModbusTcpClient
+client = ModbusTcpClient('192.168.1.50', port=502)
+
+# Activer relais 1
+client.write_coil(0, True)
+
+# Lire entrées
+inputs = client.read_discrete_inputs(10000, 8)
+```
 
 ## 🔍 Diagnostic
 
@@ -121,6 +138,7 @@ pins
 | Entrées Digitales | ✅ OK | Pins 4-11 avec pull-up |
 | Interface Série | ✅ OK | Commandes complètes |
 | Diagnostic I2C | ✅ OK | Scan et test pins |
+| Modbus TCP | ✅ OK | Port 502, registres configurés |
 | Ethernet W5500 | 🔧 Config | Nécessite connexion physique |
 | DHT22 | 🔧 Config | Pin 12 configuré |
 
@@ -131,6 +149,7 @@ ESP32-S3-ETH-8DI-8RO
 ├── TCA9554 (I2C 0x20) → 8 Relais
 ├── Entrées digitales → Pins 4-11  
 ├── W5500 (SPI) → Ethernet
+├── Modbus TCP → Port 502 (Coils 0-7, Inputs 10000-10007)
 ├── DHT22 → Pin 12
 └── Interface série → Diagnostic
 ```
