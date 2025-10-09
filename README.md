@@ -1,24 +1,28 @@
 # ESP32-S3-ETH-8DI-8RO Controller
 
+# ESP32-S3-ETH-8DI-8RO Controller
+
 ## 📋 Description
 
-Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec Ethernet, MQTT, interface web et contrôle de 8 relais + 8 entrées digitales.
+✅ **SYSTÈME OPÉRATIONNEL** - Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec Ethernet, MQTT et contrôle de 8 relais + 8 entrées digitales.
 
 ## ✨ Fonctionnalités
 
 ### ✅ Opérationnelles
 - **🌐 Ethernet W5500** avec IP statique (192.168.1.50)
 - **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41)
-- **📥 8 Entrées digitales** avec pull-up (pins 4-11)
-- **📡 Interface MQTT** pour domotique/IoT avec authentification
+- **📥 8 Entrées digitales** avec pull-up (pins 4-11, logique corrigée)
+- **📡 Interface MQTT** pour Home Assistant avec authentification (pascal/123456)
+- **🏠 Broker Mosquitto** : 192.168.1.200:1883
 - **🔧 Interface série interactive** avec commandes complètes
-- **🌡️ Capteur DHT22** température/humidité (pin 40)
-- **🛠️ Système de diagnostic** avancé
+- **🌡️ Capteur DHT22** température/humidité (pin 1)
+- **🛠️ Système de diagnostic** avancé avec mqtttest
+- **📊 Parsing JSON** pour commandes MQTT modernes
 
-### 🔄 En Attente
-- **💻 Interface Web responsive** (développement suspendu)
-- **⚡ API REST** pour intégration externe (développement suspendu)
-- **🏭 Modbus TCP** pour intégration industrielle (développement suspendu)
+### 🔄 En Attente (développement suspendu)
+- **💻 Interface Web responsive**
+- **⚡ API REST** pour intégration externe
+- **🏭 Modbus TCP** pour intégration industrielle
 
 ## 🎮 Commandes Disponibles
 
@@ -43,11 +47,14 @@ relay X off - Désactive le relais X (1-8)
 - **Actualisation automatique** toutes les 10s
 
 ### MQTT
-- **Broker par défaut** : 192.168.1.100:1883
+- **Broker** : 192.168.1.200:1883 (pascal/123456)
 - **Topics** :
-  - `esp32s3/relay/cmd` - Commandes relais
-  - `esp32s3/relay/state` - États relais
-  - `esp32s3/input/state` - États entrées
+  - `esp32s3/relay/cmd` - Commandes relais JSON/simple
+  - `esp32s3/relay/status` - États relais
+  - `esp32s3/sensor` - Température, humidité, entrées
+- **Formats supportés** :
+  - JSON : `{"relay": 1, "state": "on"}`
+  - Simple : `1:ON`
   - `esp32s3/sensor` - Données capteurs
   - `esp32s3/status` - État système
 
