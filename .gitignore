@@ -1,0 +1,25 @@
+# PlatformIO
+.pio/
+.vscode/
+.pioenvs/
+.piolibdeps/
+
+# Build artifacts
+*.bin
+*.elf
+*.map
+
+# Demo officiel Waveshare
+demo_officiel/
+*.zip
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
