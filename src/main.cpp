@@ -1,324 +1,431 @@
 #include <Arduino.h>
-#include <Ethernet.h>
-#include <Wire.h>
-#include <DHT.h>
 #include <SPI.h>
-#include <PubSubClient.h>
+#include <Ethernet.h>
+#include <DHT.h>
+#include <Wire.h>
 #include <ArduinoJson.h>
+#include <PubSubClient.h>
+#include <SPIFFS.h>
+#include "web_config.h"
 
-// Configuration réseau
+// Configuration des pins - WAVESHARE OFFICIEL VALIDÉ
+#define ETH_SCK_PIN  15   // SPI Clock
+#define ETH_MISO_PIN 14   // SPI MISO
+#define ETH_MOSI_PIN 13   // SPI MOSI
+#define ETH_CS_PIN   16   // W5500 Chip Select
+#define ETH_RST_PIN  39   // W5500 Reset
+#define ETH_IRQ_PIN  12   // W5500 Interrupt
+
+#define DHT_PIN      40   // DHT22 Data
+#define DHT_TYPE     DHT22
+
+#define I2C_SDA_PIN  42   // TCA9554 SDA (I2C) - WAVESHARE OFFICIEL
+#define I2C_SCL_PIN  41   // TCA9554 SCL (I2C) - WAVESHARE OFFICIEL
+#define TCA9554_ADDR 0x20 // Adresse TCA9554
+
+// MAC Ethernet
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 IPAddress staticIP(192, 168, 1, 50);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress dns1(8, 8, 8, 8);
 
-// Configuration MQTT
-IPAddress mqttServer(192, 168, 1, 200); // Home Assistant Mosquitto broker
-#define MQTT_PORT 1883
-#define MQTT_CLIENT_ID "ESP32S3_8DI8RO"
-#define MQTT_USER "pascal"    // Login MQTT
-#define MQTT_PASS "123456"    // Password MQTT
+// Configuration MQTT (Mosquitto @ 192.168.1.200:1883)
+IPAddress mqttServer(192, 168, 1, 200);
+uint16_t mqttPort = 1883;
+char mqttUser[50] = "pascal";
+char mqttPassword[50] = "123456";
+const char* mqttClientID = "ESP32-S3-ETH";
+const char* CONFIG_FILE = "/config.json";
 
-// Topics MQTT
-#define TOPIC_STATUS "esp32s3/status"
-#define TOPIC_RELAY_CMD "esp32s3/relay/cmd"
-#define TOPIC_RELAY_STATE "esp32s3/relay/state"
-#define TOPIC_INPUT_STATE "esp32s3/input/state"
-#define TOPIC_SENSOR "esp32s3/sensor"
+// MQTT Topics
+char topicRelayCmd[100] = "home/esp32/relay/cmd";
+char topicRelayStatus[100] = "home/esp32/relay/status";
+char topicInputStatus[100] = "home/esp32/input/status";
+char topicSensorStatus[100] = "home/esp32/sensor/status";
+char topicSystemStatus[100] = "home/esp32/system/status";
 
-// Pins SPI W5500 - VRAIE CONFIG WAVESHARE selon WS_ETH.h
-#define ETH_CS_PIN    16    // CS = Pin 16 (selon Waveshare)
-#define ETH_RST_PIN   39    // Reset = Pin 39 (selon Waveshare)
-#define ETH_IRQ_PIN   12    // IRQ = Pin 12 (selon Waveshare)
-#define ETH_SCK_PIN   15    // SCK = Pin 15 (selon Waveshare)
-#define ETH_MISO_PIN  14    // MISO = Pin 14 (selon Waveshare)
-#define ETH_MOSI_PIN  13    // MOSI = Pin 13 (selon Waveshare)
-
-// Configuration matérielle
-#define DHT_PIN 40
-#define DHT_TYPE DHT22
-#define TCA9554_ADDR 0x20
-
-// Pins I2C pour TCA9554 - PINS WAVESHARE OFFICIELS
-#define I2C_SDA_PIN 42
-#define I2C_SCL_PIN 41
-
-// Pins des entrées digitales (pins réels selon schéma Waveshare)
+// Pins des entrées digitales
 const int digitalInputs[8] = {4, 5, 6, 7, 8, 9, 10, 11};
 
+// DHT22 Sensor
 DHT dht(DHT_PIN, DHT_TYPE);
 
-// Clients réseau
-EthernetClient ethClient;
-PubSubClient mqttClient(ethClient);
-
-// États des relais et entrées
-bool relayStates[8] = {false};
-bool inputStates[8] = {false};
-bool lastInputStates[8] = {false};
+// État de l'application
 float temperature = 0.0;
 float humidity = 0.0;
-uint32_t lastMqttPublish = 0;
-uint32_t lastMqttReconnect = 0;
+bool relayStates[8] = {false};
+bool inputStates[8] = {true};
+bool serverStarted = false;
 
-// ===== FONCTIONS UTILITAIRES =====
-void tca9554_write(uint8_t data) {
-  Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x01); // Output register
-  Wire.write(data); // ENLEVER L'INVERSION - Test direct
-  Wire.endTransmission();
-  
-  // Debug
-  Serial.printf("TCA9554 écrit: 0x%02X (relais data: 0x%02X)\n", data, data);
-}
+// Variables pour serveur HTTP simple
+EthernetClient clients[4];  // Max 4 clients simultanés
+uint16_t httpPort = 80;
 
-void tca9554_init() {
-  // IMPORTANT: Configurer tous les pins en sortie AVANT d'écrire les données
-  Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x03); // Configuration register
-  Wire.write(0x00); // Tous en sortie
-  uint8_t result = Wire.endTransmission();
-  
-  if (result == 0) {
-    Serial.println("✓ TCA9554 communication OK");
-    // MAINTENANT ON SAIT: 0x00 = relais OFF, 0xFF = relais ON
-    delay(50); // Pause pour stabilité
-    
-    Serial.println("Arrêt définitif de tous les relais...");
-    tca9554_write(0x00); // TOUS OFF avec la bonne valeur
-    delay(100);
-    
-    Serial.println("✓ Tous les relais forcés OFF au démarrage");
-  } else {
-    Serial.printf("❌ TCA9554 erreur communication: %d\n", result);
-  }
-}
+// MQTT Client
+EthernetClient ethClient;
+PubSubClient mqttClient(ethClient);
+bool mqttConnected = false;
+unsigned long lastMqttPublish = 0;
+const unsigned long mqttPublishInterval = 5000;  // Publier chaque 5s
+
+// ===== FONCTIONS FORWARD =====
+void setRelay(int relay, bool state);
+void readInputs();
+void readSensors();
+String getHtmlPage();
+void handleHttpConnections();
+void setupWebServer();
+void setupMqtt();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void mqttPublishStatus();
+void mqttReconnect();
+
+// ===== FONCTIONS IMPLÉMENTATION =====
 
 void setRelay(int relay, bool state) {
   if (relay >= 0 && relay < 8) {
     relayStates[relay] = state;
-    uint8_t relayData = 0;
-    for (int i = 0; i < 8; i++) {
-      if (relayStates[i]) {
-        relayData |= (1 << i);  // Bit à 1 = relais ON
-      }
+    
+    // Lire l'état actuel du TCA9554
+    Wire.beginTransmission(TCA9554_ADDR);
+    Wire.write(0x01); // Output port register
+    Wire.endTransmission();
+    Wire.requestFrom(TCA9554_ADDR, 1);
+    byte output = Wire.read();
+    
+    // Modifier le bit du relais (inversion: ON = LOW, OFF = HIGH)
+    if (state) {
+      output &= ~(1 << relay); // SET bit LOW pour activé
+    } else {
+      output |= (1 << relay);  // SET bit HIGH pour désactivé
     }
-    tca9554_write(relayData);
-    Serial.printf("Relais %d: %s (données: 0x%02X)\n", relay+1, state ? "ON" : "OFF", relayData);
+    
+    // Écrire de retour au registre output
+    Wire.beginTransmission(TCA9554_ADDR);
+    Wire.write(0x01); // Output port register
+    Wire.write(output);
+    Wire.endTransmission();
+    
+    Serial.printf("✓ Relais %d: %s (TCA9554 @ 0x%02X bit %d)\n", relay+1, state ? "ON" : "OFF", TCA9554_ADDR, relay);
   }
 }
 
 void readInputs() {
   for (int i = 0; i < 8; i++) {
-    // INPUT_PULLUP: logique inversée (0 = activé, 1 = inactif)
-    inputStates[i] = !digitalRead(digitalInputs[i]);
+    inputStates[i] = digitalRead(digitalInputs[i]);
   }
 }
 
 void readSensors() {
   temperature = dht.readTemperature();
   humidity = dht.readHumidity();
-  
   if (isnan(temperature)) temperature = 0.0;
   if (isnan(humidity)) humidity = 0.0;
 }
 
-void scanI2C() {
-  Serial.println("\n=== SCAN I2C ===");
-  byte error, address;
-  int nDevices = 0;
+String getHtmlPage() {
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta charset='utf-8'>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+  html += "<title>ESP32-8DI8RO Dashboard</title>";
+  html += "<style>";
+  html += "* {margin:0;padding:0;box-sizing:border-box;}";
+  html += "body {font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;color:#333;}";
+  html += "header {background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:20px;text-align:center;}";
+  html += ".container {max-width:1200px;margin:0 auto;padding:20px;}";
+  html += ".card {background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:20px;margin:15px 0;}";
+  html += ".grid2 {display:grid;grid-template-columns:1fr 1fr;gap:20px;}";
+  html += ".grid4 {display:grid;grid-template-columns:repeat(4,1fr);gap:15px;}";
+  html += ".stat {text-align:center;padding:15px;background:#f9f9f9;border-radius:5px;}";
+  html += ".stat-value {font-size:24px;font-weight:bold;color:#667eea;}";
+  html += ".stat-label {font-size:12px;color:#999;margin-top:5px;}";
+  html += ".relay-item {padding:15px;border:2px solid #ddd;border-radius:5px;text-align:center;transition:all 0.3s;}";
+  html += ".relay-item:hover {border-color:#667eea;background:#f0f0ff;}";
+  html += ".relay-item.on {background:#c8e6c9;border-color:#4CAF50;}";
+  html += ".relay-item.off {background:#ffcccc;border-color:#f44336;}";
+  html += ".relay-num {font-size:14px;color:#999;margin-bottom:10px;}";
+  html += ".relay-status {font-size:18px;font-weight:bold;margin:10px 0;}";
+  html += ".relay-btn {padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;width:100%;transition:all 0.3s;}";
+  html += ".relay-btn.on {background:#4CAF50;color:white;}";
+  html += ".relay-btn.off {background:#f44336;color:white;}";
+  html += ".relay-btn:hover {opacity:0.8;}";
+  html += ".relay-btn:active {transform:scale(0.98);}";
+  html += ".input-item {padding:15px;border:2px solid #ddd;border-radius:5px;text-align:center;}";
+  html += ".input-item.high {background:#c8e6c9;border-color:#4CAF50;}";
+  html += ".input-item.low {background:#ffcccc;border-color:#f44336;}";
+  html += ".input-num {font-size:14px;color:#999;margin-bottom:10px;}";
+  html += ".input-status {font-size:16px;font-weight:bold;margin:10px 0;}";
+  html += "h2 {color:#333;margin:20px 0 15px 0;font-size:18px;border-bottom:2px solid #667eea;padding-bottom:10px;}";
+  html += ".status-bar {background:#fff;padding:10px;border-radius:5px;font-size:12px;color:#666;margin-top:20px;}";
+  html += "footer {text-align:center;color:#999;margin-top:40px;padding:20px;font-size:12px;}";
+  html += "</style></head><body>";
+  html += "<header><h1>⚡ ESP32-S3-ETH-8DI8RO Dashboard</h1></header>";
+  html += "<div class='container'>";
   
-  for(address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    
-    if (error == 0) {
-      Serial.printf("Device I2C trouvé à l'adresse 0x%02X\n", address);
-      nDevices++;
-    }
-  }
+  // Section Capteurs
+  html += "<div class='card'>";
+  html += "<h2>📊 Capteurs</h2>";
+  html += "<div class='grid2'>";
+  html += "<div class='stat'><div class='stat-value'>";
+  html += String(temperature, 1);
+  html += "°C</div><div class='stat-label'>🌡️ Température</div></div>";
+  html += "<div class='stat'><div class='stat-value'>";
+  html += String(humidity, 1);
+  html += "%</div><div class='stat-label'>💧 Humidité</div></div>";
+  html += "</div></div>";
   
-  if (nDevices == 0) {
-    Serial.println("❌ Aucun device I2C trouvé");
-  } else {
-    Serial.printf("✓ %d device(s) I2C trouvé(s)\n", nDevices);
+  // Section Relais
+  html += "<div class='card'>";
+  html += "<h2>⚡ Relais (8)</h2>";
+  html += "<div class='grid4'>";
+  for (int i = 0; i < 8; i++) {
+    bool isOn = relayStates[i];
+    html += "<div class='relay-item ";
+    html += (isOn ? "on" : "off");
+    html += "'><div class='relay-num'>Relais ";
+    html += String(i+1);
+    html += "</div><div class='relay-status'>";
+    html += (isOn ? "ON" : "OFF");
+    html += "</div>";
+    html += "<form method='POST' action='/api/relay/";
+    html += String(i);
+    html += (isOn ? "/off' style='display:inline;width:100%'>" : "/on' style='display:inline;width:100%'>");
+    html += "<button type='submit' class='relay-btn ";
+    html += (isOn ? "on" : "off");
+    html += "'>";
+    html += (isOn ? "Éteindre" : "Allumer");
+    html += "</button></form></div>";
   }
-
-  Serial.println("================");
+  html += "</div></div>";
+  
+  // Section Entrées
+  html += "<div class='card'>";
+  html += "<h2>📥 Entrées Digitales (8)</h2>";
+  html += "<div class='grid4'>";
+  for (int i = 0; i < 8; i++) {
+    bool isHigh = inputStates[i];
+    html += "<div class='input-item ";
+    html += (isHigh ? "high" : "low");
+    html += "'><div class='input-num'>Entrée ";
+    html += String(i+1);
+    html += "</div><div class='input-status'>";
+    html += (isHigh ? "HIGH" : "LOW");
+    html += "</div></div>";
+  }
+  html += "</div></div>";
+  
+  html += "<div class='card status-bar'>";
+  html += "Système opérationnel | Ethernet W5500 | Rafraîchissement: 3s";
+  html += "</div>";
+  
+  html += "</div>";
+  html += "<script>setTimeout(function(){location.reload();},3000);</script>";
+  html += "<footer>API JSON: /api/status | Contrôle: /api/relay/X/on ou /api/relay/X/off</footer>";
+  html += "</body></html>";
+  
+  return html;
 }
 
 // ===== FONCTIONS MQTT =====
-void publishStatus() {
-  if (!mqttClient.connected()) return;
-  
-  DynamicJsonDocument doc(512);
-  doc["ip"] = Ethernet.localIP().toString();
-  doc["uptime"] = millis() / 1000;
-  doc["ethernet"] = (Ethernet.linkStatus() == LinkON) ? "OK" : "ERROR";
-  doc["i2c"] = "OK";
-  
-  String payload;
-  serializeJson(doc, payload);
-  mqttClient.publish(TOPIC_STATUS, payload.c_str());
-}
-
-void publishRelayStates() {
-  if (!mqttClient.connected()) return;
-  
-  DynamicJsonDocument doc(256);
-  JsonArray relays = doc.createNestedArray("relays");
-  for (int i = 0; i < 8; i++) {
-    relays.add(relayStates[i] ? 1 : 0);
-  }
-  
-  String payload;
-  serializeJson(doc, payload);
-  mqttClient.publish(TOPIC_RELAY_STATE, payload.c_str());
-}
-
-void publishInputStates() {
-  if (!mqttClient.connected()) return;
-  
-  DynamicJsonDocument doc(256);
-  JsonArray inputs = doc.createNestedArray("inputs");
-  for (int i = 0; i < 8; i++) {
-    inputs.add(inputStates[i] ? 1 : 0);
-  }
-  
-  String payload;
-  serializeJson(doc, payload);
-  mqttClient.publish(TOPIC_INPUT_STATE, payload.c_str());
-}
-
-void publishSensorData() {
-  if (!mqttClient.connected()) return;
-  
-  DynamicJsonDocument doc(256);
-  doc["temperature"] = temperature;
-  doc["humidity"] = humidity;
-  doc["timestamp"] = millis() / 1000;
-  
-  String payload;
-  serializeJson(doc, payload);
-  mqttClient.publish(TOPIC_SENSOR, payload.c_str());
-}
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String message = "";
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
+  // Traiter les commandes reçues via MQTT
+  String topicStr(topic);
+  String payloadStr("");
+  for (unsigned int i = 0; i < length; i++) {
+    payloadStr += (char)payload[i];
   }
   
-  Serial.printf("🔥 MQTT REÇU: Topic='%s' Message='%s'\n", topic, message.c_str());
+  Serial.printf("\n📨 MQTT Reçu:\n");
+  Serial.printf("   Topic: %s\n", topic);
+  Serial.printf("   Payload: %s\n", payloadStr.c_str());
+  Serial.printf("   Expected: %s\n", topicRelayCmd);
+  Serial.printf("   Match: %s\n", (topicStr == topicRelayCmd) ? "OUI" : "NON");
   
-  if (String(topic) == TOPIC_RELAY_CMD) {
-    Serial.println("📡 Traitement commande relais...");
+  // Parser commandes de relais: home/esp32/relay/cmd
+  if (topicStr == topicRelayCmd) {
+    Serial.println("✓ Topic reconnu - parsing...");
     
-    // Vérifier si c'est du JSON ou format simple
-    if (message.startsWith("{")) {
-      // Format JSON: {"relay": 1, "state": "on"}
-      DynamicJsonDocument doc(200);
-      DeserializationError error = deserializeJson(doc, message);
+    // Format: "0:on" ou "1:off" ou "ALL:on"
+    int colonPos = payloadStr.indexOf(':');
+    Serial.printf("   Colon position: %d\n", colonPos);
+    
+    if (colonPos > 0) {
+      String relayStr = payloadStr.substring(0, colonPos);
+      String stateStr = payloadStr.substring(colonPos + 1);
+      stateStr.toLowerCase();
       
-      if (error) {
-        Serial.printf("❌ Erreur parsing JSON: %s\n", error.c_str());
-        return;
-      }
+      Serial.printf("   Relay: %s, State: %s\n", relayStr.c_str(), stateStr.c_str());
       
-      int relayNum = doc["relay"];
-      String stateStr = doc["state"];
+      bool isOn = (stateStr == "on" || stateStr == "1");
       
-      Serial.printf("   JSON - Relais: %d, État: '%s'\n", relayNum, stateStr.c_str());
-      
-      if (relayNum >= 1 && relayNum <= 8) {
-        bool state = (stateStr == "on");
-        Serial.printf("🎯 Exécution: setRelay(%d, %s)\n", relayNum - 1, state ? "true" : "false");
-        setRelay(relayNum - 1, state);
-        Serial.printf("✅ MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
-        publishRelayStates();
+      if (relayStr == "ALL") {
+        // Tous les relais
+        for (int i = 0; i < 8; i++) {
+          setRelay(i, isOn);
+        }
+        Serial.println("✓ Tous les relais: " + stateStr);
       } else {
-        Serial.printf("❌ Numéro relais invalide: %d\n", relayNum);
+        // Relais spécifique
+        int relayNum = relayStr.toInt();
+        Serial.printf("   Relais numero: %d\n", relayNum);
+        
+        if (relayNum >= 0 && relayNum < 8) {
+          setRelay(relayNum, isOn);
+          Serial.printf("✓ Relais %d: %s\n", relayNum, stateStr.c_str());
+        } else {
+          Serial.printf("✗ Numero relais invalide: %d\n", relayNum);
+        }
       }
     } else {
-      // Format simple: "1:ON" ou "1:OFF"
-      int colonIndex = message.indexOf(':');
-      if (colonIndex > 0) {
-        String relayStr = message.substring(0, colonIndex);
-        String stateStr = message.substring(colonIndex + 1);
-        
-        Serial.printf("   Simple - Relais: '%s', État: '%s'\n", relayStr.c_str(), stateStr.c_str());
-        
-        if (relayStr == "ALL") {
-          bool state = (stateStr == "ON");
-          Serial.printf("   Commande TOUS les relais: %s\n", state ? "ON" : "OFF");
-          for (int i = 0; i < 8; i++) {
-            setRelay(i, state);
-          }
-          Serial.printf("MQTT: Tous les relais %s\n", state ? "ON" : "OFF");
-        } else {
-          int relayNum = relayStr.toInt();
-          Serial.printf("   Numéro relais parsé: %d\n", relayNum);
-          if (relayNum >= 1 && relayNum <= 8) {
-            bool state = (stateStr == "ON");
-            Serial.printf("   Commande relais %d: %s\n", relayNum, state ? "ON" : "OFF");
-            setRelay(relayNum - 1, state);
-            Serial.printf("MQTT: Relais %d %s\n", relayNum, state ? "ON" : "OFF");
-          } else {
-            Serial.printf("❌ Numéro relais invalide: %d\n", relayNum);
-          }
-        }
-        publishRelayStates();
-      } else {
-        Serial.printf("❌ Format message invalide: %s\n", message.c_str());
-      }
+      Serial.println("✗ Format invalide (attendu: 0:on ou ALL:off)");
     }
   } else {
-    Serial.printf("❌ Topic non reconnu: %s\n", topic);
+    Serial.println("✗ Topic non reconnu");
   }
 }
 
-void connectMQTT() {
-  if (millis() - lastMqttReconnect < 5000) return; // Éviter trop de tentatives
-  lastMqttReconnect = millis();
+void mqttPublishStatus() {
+  if (!mqttClient.connected()) return;
   
-  Serial.print("Connexion MQTT...");
-  if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASS)) {
-    Serial.println(" ✓");
-    mqttClient.subscribe(TOPIC_RELAY_CMD);
-    Serial.println("✓ Abonné aux commandes relais");
+  // État des relais
+  StaticJsonDocument<256> relayDoc;
+  for (int i = 0; i < 8; i++) {
+    relayDoc[i] = relayStates[i] ? 1 : 0;
+  }
+  String relayStatus;
+  serializeJson(relayDoc, relayStatus);
+  mqttClient.publish(topicRelayStatus, relayStatus.c_str());
+  
+  // État des entrées
+  StaticJsonDocument<256> inputDoc;
+  for (int i = 0; i < 8; i++) {
+    inputDoc[i] = inputStates[i] ? 1 : 0;
+  }
+  String inputStatus;
+  serializeJson(inputDoc, inputStatus);
+  mqttClient.publish(topicInputStatus, inputStatus.c_str());
+  
+  // État des capteurs
+  StaticJsonDocument<128> sensorDoc;
+  sensorDoc["temperature"] = temperature;
+  sensorDoc["humidity"] = humidity;
+  String sensorStatus;
+  serializeJson(sensorDoc, sensorStatus);
+  mqttClient.publish(topicSensorStatus, sensorStatus.c_str());
+  
+  // État du système
+  StaticJsonDocument<128> systemDoc;
+  systemDoc["ip"] = Ethernet.localIP().toString();
+  systemDoc["mqtt"] = "connected";
+  systemDoc["uptime"] = millis() / 1000;
+  String systemStatus;
+  serializeJson(systemDoc, systemStatus);
+  mqttClient.publish(topicSystemStatus, systemStatus.c_str());
+}
+
+void mqttReconnect() {
+  // Reconnecter au broker MQTT
+  int attempts = 0;
+  const int maxAttempts = 3;
+  
+  while (!mqttClient.connected() && attempts < maxAttempts) {
+    Serial.print("Tentative MQTT... ");
     
-    // Publier état initial
-    publishStatus();
-    publishRelayStates();
-    publishInputStates();
-  } else {
-    Serial.printf(" ✗ (code %d)\n", mqttClient.state());
+    if (mqttClient.connect(mqttClientID, mqttUser, mqttPassword)) {
+      Serial.println("✓ Connecté");
+      mqttConnected = true;
+      
+      // Souscrire aux topics de commande
+      mqttClient.subscribe(topicRelayCmd);
+      Serial.println("✓ Souscrit à " + String(topicRelayCmd));
+      
+      // Publier l'état initial
+      mqttPublishStatus();
+    } else {
+      Serial.printf("✗ Erreur: code %d\n", mqttClient.state());
+      delay(3000);
+      attempts++;
+    }
+  }
+  
+  if (!mqttClient.connected()) {
+    mqttConnected = false;
   }
 }
+
+void setupMqtt() {
+  Serial.println("\n=== Configuration MQTT ===");
+  
+  // Configurer le serveur MQTT
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(mqttCallback);
+  
+  Serial.printf("Broker: %d.%d.%d.%d:%d\n", 
+    mqttServer[0], mqttServer[1], mqttServer[2], mqttServer[3], mqttPort);
+  
+  // Tentative de connexion
+  mqttReconnect();
+}
+
+// Gestionnaire simple de connexions HTTP (stub pour maintenant)
+// Serveur HTTP simple avec Ethernet
+void handleHttpConnections() {
+  // Implémentation minimale - sera améliorée après validation de stabilité
+  // Note: EthernetServer.available() sur ESP32 nécessite une configuration lwip spéciale
+}
+
+void setupWebServer() {
+  // Serveur HTTP basique - à implémenter après validation v1.5
+  Serial.println("✓ HTTP server ready (à implémenter)");
+}
+
 
 void setup() {
-  // Initialisation série avec délai pour démarrage
   Serial.begin(9600);
-  delay(2000);
+  delay(3000);  // Extra long delay for monitor to connect
   
-  Serial.println("\n\n=== DÉMARRAGE ESP32-S3-ETH-8DI-8RO ===");
-  Serial.println("Version: MQTT + Interface Web");
-  Serial.println("Date: " + String(__DATE__) + " " + String(__TIME__));
+  Serial.write(0x00); Serial.write(0xFF);  // Flush
+  delay(500);
+  Serial.println("\n\n╔════════════════════════════════════════╗");
+  Serial.println("║ === DÉMARRAGE ESP32-S3-ETH-8DI-8RO ═══ ║");
+  Serial.println("╚════════════════════════════════════════╝");
+  delay(500);
   
-  // Test de base
-  for (int i = 0; i < 5; i++) {
-    Serial.printf("Test %d/5\n", i+1);
-    delay(500);
-  }
+  // Initialisation I2C pour TCA9554
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN); // SDA=42, SCL=41 (Waveshare official)
+  Wire.setClock(100000);
+  Serial.println("✓ I2C initialisé (SDA=42, SCL=41)");
   
-  // Initialisation I2C avec pins Waveshare officiels
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Serial.printf("✓ I2C initialisé (SDA=%d, SCL=%d)\n", I2C_SDA_PIN, I2C_SCL_PIN);
+  // Configuration TCA9554 @ 0x20
+  delay(100); // Laisser TCA9554 initialiser
   
-  // Initialisation TCA9554
-  tca9554_init();
-  Serial.println("✓ TCA9554 initialisé (relais)");
+  // Configuration des pins: 0x03 = register config (polarity inversion)
+  Wire.beginTransmission(TCA9554_ADDR);
+  Wire.write(0x03); // Polarity inversion register
+  Wire.write(0x00); // Pas d'inversion
+  Wire.endTransmission();
+  
+  // 0x07 = Output register - initialiser tous les relais à OFF (HIGH logique inversée)
+  Wire.beginTransmission(TCA9554_ADDR);
+  Wire.write(0x07); // Output register
+  Wire.write(0xFF); // Tous les outputs à 1 (relais OFF)
+  Wire.endTransmission();
+  
+  // 0x06 = IO configuration register (0=output, 1=input)
+  Wire.beginTransmission(TCA9554_ADDR);
+  Wire.write(0x06); // Config register
+  Wire.write(0x00); // Tous les pins en OUTPUT mode (relais)
+  Wire.endTransmission();
+  
+  Serial.println("✓ TCA9554 configuré (8 relais OUTPUT)");
+  
+  Wire.beginTransmission(0x20);
+  Wire.write(0x01); // Output register
+  Wire.write(0x00); // Tous les relais OFF au démarrage
+  Wire.endTransmission();
+  Serial.println("✓ TCA9554 (I2C @ 0x20) configuré");
   
   // Initialisation DHT22
   dht.begin();
@@ -329,21 +436,21 @@ void setup() {
     pinMode(digitalInputs[i], INPUT_PULLUP);
   }
   Serial.println("✓ Entrées digitales configurées");
-  
-  // Initialisation SPI avec les VRAIS pins Waveshare
-  Serial.println("Configuration SPI avec pins Waveshare...");
+
+  // Initialisation SPI pour W5500
+  Serial.println("Configuration SPI...");
   SPI.begin(ETH_SCK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN, ETH_CS_PIN);
   Serial.printf("✓ SPI: SCK=%d, MISO=%d, MOSI=%d, CS=%d\n", 
                 ETH_SCK_PIN, ETH_MISO_PIN, ETH_MOSI_PIN, ETH_CS_PIN);
-  
+
   // Configuration des pins
   pinMode(ETH_CS_PIN, OUTPUT);
   pinMode(ETH_RST_PIN, OUTPUT);
   pinMode(ETH_IRQ_PIN, INPUT);
   
-  digitalWrite(ETH_CS_PIN, HIGH);  // CS inactif
+  digitalWrite(ETH_CS_PIN, HIGH);
   
-  // Reset du W5500 avec les vrais pins
+  // Reset du W5500
   Serial.printf("Reset W5500 (pin %d)...\n", ETH_RST_PIN);
   digitalWrite(ETH_RST_PIN, LOW);
   delay(100);
@@ -352,46 +459,103 @@ void setup() {
   
   Serial.println("✓ Reset W5500 terminé");
   
-  // Initialisation Ethernet
+  // Initialisation Ethernet W5500
   Ethernet.init(ETH_CS_PIN);
   Serial.print("Initialisation Ethernet...");
-  
   Ethernet.begin(mac, staticIP, dns1, gateway, subnet);
   delay(2000);
   
-  // Vérification Ethernet
+  // Vérification statut Ethernet
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println(" ✗");
-    Serial.println("❌ W5500 non détecté avec ces pins!");
+    Serial.println("❌ W5500 non détecté!");
   } else if (Ethernet.linkStatus() == LinkOFF) {
     Serial.println(" ⚠️");
-    Serial.println("⚠️  W5500 détecté mais pas de câble");
+    Serial.println("⚠️ W5500 détecté mais pas de câble");
   } else {
     Serial.println(" ✓");
     Serial.print("✓ IP Ethernet: ");
     Serial.println(Ethernet.localIP());
   }
   
-  // Initialisation MQTT
-  mqttClient.setServer(mqttServer, MQTT_PORT);
-  mqttClient.setCallback(mqttCallback);
-  Serial.printf("✓ MQTT configuré: %s:%d\n", mqttServer.toString().c_str(), MQTT_PORT);
+  serverStarted = true;
+  Serial.println("✓ Serveur HTTP sur port 80");
+  Serial.print("  Accès: http://");
+  Serial.println(Ethernet.localIP());
   
-  Serial.println("\n=== Système prêt ===");
-  Serial.println("Fonctionnalités disponibles:");
-  Serial.println("- Interface web: http://" + Ethernet.localIP().toString());
-  Serial.println("- MQTT: " + mqttServer.toString() + ":" + String(MQTT_PORT));
-  Serial.println("- Commandes série: tapez 'help'");
+  // Initialisation SPIFFS et chargement config MQTT
+  initSPIFFS();
+  loadMQTTConfig();
+  
+  // Configuration MQTT
+  setupMqtt();
+  
+  Serial.println("\n=== Système prêt ===\n");
+  Serial.println("Accès interface web: http://");
+  Serial.print(Ethernet.localIP());
+  Serial.println("/config");
 }
 
 void loop() {
+  // Maintenir la connexion Ethernet
   Ethernet.maintain();
   
-  // Connexion MQTT si nécessaire
+  // Gestion HTTP
+  handleWebServer(clients[0]);
+  
+  // Gestion MQTT
   if (!mqttClient.connected()) {
-    connectMQTT();
+    Serial.println("✗ MQTT Déconnecté - reconnexion...");
+    mqttReconnect();
+  } else {
+    mqttClient.loop();  // Process incoming messages
+    Serial.print(".");  // Signal que le loop tourne
+    
+    // Publier l'état régulièrement
+    if (millis() - lastMqttPublish >= mqttPublishInterval) {
+      lastMqttPublish = millis();
+      mqttPublishStatus();
+    }
   }
-  mqttClient.loop();
+  
+  // Traitement des commandes sériales
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    
+    // Parse commands: "relay X on/off" or "test"
+    if (cmd.startsWith("relay ")) {
+      int spaceIdx1 = cmd.indexOf(' ', 6);
+      if (spaceIdx1 > 0) {
+        int relayNum = cmd.substring(6, spaceIdx1).toInt();
+        String state = cmd.substring(spaceIdx1 + 1);
+        bool isOn = (state == "on");
+        
+        if (relayNum >= 0 && relayNum < 8) {
+          Serial.printf("Test relay %d: %s\n", relayNum, isOn ? "ON" : "OFF");
+          setRelay(relayNum, isOn);
+          delay(100);
+          Serial.printf("✓ Relay %d set to %s\n", relayNum, isOn ? "ON" : "OFF");
+        } else {
+          Serial.println("Erreur: relay num 0-7");
+        }
+      }
+    } else if (cmd == "test") {
+      Serial.println("\n=== TEST RELAIS (0-7) ===");
+      for (int i = 0; i < 8; i++) {
+        Serial.printf("Allumage relais %d...\n", i);
+        setRelay(i, true);
+        delay(500);
+        setRelay(i, false);
+      }
+      Serial.println("✓ Test complet\n");
+    } else if (cmd == "help") {
+      Serial.println("\nCommandes disponibles:");
+      Serial.println("  relay X on/off  - Allume/éteint relais X (0-7)");
+      Serial.println("  test            - Test tous les relais");
+      Serial.println("  help            - Affiche cette aide\n");
+    }
+  }
   
   // Lecture des capteurs et entrées toutes les 2 secondes
   static uint32_t lastSensorRead = 0;
@@ -400,196 +564,10 @@ void loop() {
     readSensors();
     readInputs();
     
-    // Vérifier changements d'entrées pour MQTT
-    bool inputChanged = false;
-    for (int i = 0; i < 8; i++) {
-      if (inputStates[i] != lastInputStates[i]) {
-        inputChanged = true;
-        lastInputStates[i] = inputStates[i];
-      }
-    }
-    if (inputChanged) {
-      publishInputStates();
-    }
-  }
-  
-  // Publication MQTT périodique (toutes les 30 secondes)
-  if (mqttClient.connected() && (millis() - lastMqttPublish > 30000)) {
-    lastMqttPublish = millis();
-    publishSensorData();
-    publishStatus();
-  }
-  
-  // Commandes série pour debug et contrôle immédiat
-  if (Serial.available()) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    command.toLowerCase();
-    
-    if (command.startsWith("relay ")) {
-      int relayNum = command.substring(6, 7).toInt();
-      String state = command.substring(8);
-      
-      if (relayNum >= 1 && relayNum <= 8) {
-        if (state == "on") {
-          setRelay(relayNum - 1, true);
-          Serial.printf("Relais %d: ON\n", relayNum);
-          publishRelayStates();
-        } else if (state == "off") {
-          setRelay(relayNum - 1, false);
-          Serial.printf("Relais %d: OFF\n", relayNum);
-          publishRelayStates();
-        }
-      }
-    }
-    else if (command == "status") {
-      Serial.println("\n=== STATUS SYSTÈME ===");
-      Serial.printf("Uptime: %d secondes\n", millis()/1000);
-      
-      // Ethernet
-      if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-        Serial.println("Ethernet W5500: ✗ ERREUR");
-      } else if (Ethernet.linkStatus() == LinkOFF) {
-        Serial.println("Ethernet W5500: ⚠️ PAS DE CÂBLE");
-      } else {
-        Serial.printf("Ethernet W5500: ✓ OK (%s)\n", Ethernet.localIP().toString().c_str());
-      }
-      
-      // MQTT
-      Serial.printf("MQTT: %s\n", mqttClient.connected() ? "✓ Connecté" : "✗ Déconnecté");
-      
-      // I2C/TCA9554
-      Wire.beginTransmission(TCA9554_ADDR);
-      uint8_t i2cResult = Wire.endTransmission();
-      Serial.printf("TCA9554 I2C: %s\n", i2cResult == 0 ? "✓ OK" : "✗ ERREUR");
-      
-      // Capteurs
-      Serial.printf("Température: %.1f°C\n", temperature);
-      Serial.printf("Humidité: %.1f%%\n", humidity);
-      
-      // Relais
-      Serial.print("Relais: ");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("%d:%s ", i+1, relayStates[i] ? "ON" : "OFF");
-      }
-      Serial.println();
-      
-      // Entrées
-      Serial.print("Entrées: ");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("%d:%s ", i+1, inputStates[i] ? "HIGH" : "LOW");
-      }
-      Serial.println();
-      Serial.println("=======================");
-    }
-    else if (command == "scan") {
-      scanI2C();
-    }
-    else if (command == "testio") {
-      Serial.println("\n=== TEST ENTRÉES/SORTIES ===");
-      
-      // Test des entrées
-      readInputs();
-      Serial.println("📥 État des entrées digitales:");
-      for (int i = 0; i < 8; i++) {
-        Serial.printf("  Entrée %d (pin %d): %s\n", i+1, digitalInputs[i], inputStates[i] ? "HIGH" : "LOW");
-      }
-      
-      // Test séquentiel des relais si TCA9554 OK
-      Wire.beginTransmission(TCA9554_ADDR);
-      uint8_t i2cResult = Wire.endTransmission();
-      
-      if (i2cResult == 0) {
-        Serial.println("🔌 Test séquentiel des relais:");
-        for (int i = 0; i < 8; i++) {
-          Serial.printf("  Test relais %d...", i+1);
-          setRelay(i, true);
-          delay(500);
-          setRelay(i, false);
-          delay(200);
-          Serial.println(" OK");
-        }
-        Serial.println("✓ Test relais terminé");
-      } else {
-        Serial.println("❌ TCA9554 inaccessible - relais non testés");
-      }
-      Serial.println("===============================");
-    }
-    else if (command == "mqtttest") {
-      Serial.println("\n=== DIAGNOSTIC MQTT ===");
-      Serial.printf("Broker: %s:%d\n", mqttServer.toString().c_str(), MQTT_PORT);
-      Serial.printf("Client ID: %s\n", MQTT_CLIENT_ID);
-      Serial.printf("User: %s\n", MQTT_USER);
-      Serial.printf("Connecté: %s\n", mqttClient.connected() ? "✓ OUI" : "✗ NON");
-      
-      if (mqttClient.connected()) {
-        Serial.println("📡 Test publication...");
-        bool result = mqttClient.publish("esp32s3/test", "Hello from ESP32");
-        Serial.printf("Publication test: %s\n", result ? "✓ OK" : "✗ ÉCHEC");
-        
-        Serial.println("📡 État abonnements:");
-        Serial.println("  - esp32s3/relay/cmd (souscrit au démarrage)");
-      } else {
-        Serial.printf("Erreur connexion: %d\n", mqttClient.state());
-        Serial.println("Codes erreur MQTT:");
-        Serial.println("  -4: Connection timeout");
-        Serial.println("  -3: Connection lost");
-        Serial.println("  -2: Connect failed");
-        Serial.println("  -1: Disconnected");
-        Serial.println("   0: Connected");
-        Serial.println("   1: Bad protocol");
-        Serial.println("   2: Bad client ID");
-        Serial.println("   3: Unavailable");
-        Serial.println("   4: Bad credentials");
-        Serial.println("   5: Unauthorized");
-      }
-      Serial.println("========================");
-    }
-    else if (command == "testrelays") {
-      Serial.println("\n=== TEST LOGIQUE RELAIS ===");
-      Serial.println("Test 1: Écriture 0x00...");
-      tca9554_write(0x00);
-      delay(2000);
-      Serial.println("Test 2: Écriture 0xFF...");
-      tca9554_write(0xFF);
-      delay(2000);
-      Serial.println("Test 3: Écriture 0x01 (relais 1)...");
-      tca9554_write(0x01);
-      delay(2000);
-      Serial.println("Test 4: Écriture 0xFE (tous sauf relais 1)...");
-      tca9554_write(0xFE);
-      delay(2000);
-      Serial.println("Test terminé - observez quand les relais s'activent");
-      Serial.println("=============================");
-    }
-    else if (command == "forceoff") {
-      Serial.println("\n=== FORCE TOUS RELAIS OFF ===");
-      // Reset des états logiciels
-      for (int i = 0; i < 8; i++) {
-        relayStates[i] = false;
-      }
-      // Utiliser la BONNE logique maintenant identifiée
-      Serial.println("Arrêt avec 0x00 (logique confirmée)...");
-      tca9554_write(0x00);
-      Serial.println("✓ Tous les relais arrêtés");
-      Serial.println("==============================");
-    }
-    else if (command == "help") {
-      Serial.println("\n=== COMMANDES DISPONIBLES ===");
-      Serial.println("📋 Informations:");
-      Serial.println("  help           - Cette aide");
-      Serial.println("  status         - Status détaillé complet");
-      Serial.println("  scan           - Scan I2C des devices");
-      Serial.println("  testio         - Test entrées et relais");
-      Serial.println("  mqtttest       - Diagnostic MQTT détaillé");
-      Serial.println("🔌 Contrôle des relais:");
-      Serial.println("  relay X on/off - Contrôler relais 1-8");
-      Serial.println("  testrelays     - Test logique relais (observer physiquement)");
-      Serial.println("  forceoff       - Force arrêt tous relais");
-      Serial.println("🌐 Accès réseau:");
-      Serial.println("  Interface web: http://" + Ethernet.localIP().toString());
-      Serial.println("  MQTT: " + mqttServer.toString() + ":" + String(MQTT_PORT));
-      Serial.println("==============================");
-    }
+    Serial.printf("Temp=%.1f°C Hum=%.1f%% | Relais: ", temperature, humidity);
+    for (int i = 0; i < 8; i++) Serial.printf("%d ", relayStates[i] ? 1 : 0);
+    Serial.print("| Entrées: ");
+    for (int i = 0; i < 8; i++) Serial.printf("%d ", inputStates[i] ? 1 : 0);
+    Serial.println();
   }
 }

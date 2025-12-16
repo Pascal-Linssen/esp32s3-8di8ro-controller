@@ -8,33 +8,28 @@
 
 ## ✨ Fonctionnalités
 
-### ✅ Opérationnelles
-- **🌐 Ethernet W5500** avec IP statique (192.168.1.50)
-- **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41)
-- **📥 8 Entrées digitales** avec pull-up (pins 4-11, logique corrigée)
-- **📡 Interface MQTT** pour Home Assistant avec authentification (pascal/123456)
-- **🏠 Broker Mosquitto** : 192.168.1.200:1883
-- **🔧 Interface série interactive** avec commandes complètes
-- **🌡️ Capteur DHT22** température/humidité (pin 1)
-- **🛠️ Système de diagnostic** avancé avec mqtttest
-- **📊 Parsing JSON** pour commandes MQTT modernes
+### ✅ Opérationnelles (v1.5 - SESSION 3)
+- **🌐 Ethernet W5500** avec IP statique (192.168.1.50) - TESTÉ ✓
+- **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41) - **TOUS LES 8 TESTÉS ✓**
+- **📥 8 Entrées digitales** avec pull-up interne (pins 4-11) - TOUS LES 8 TESTÉS ✓
+- **🌡️ Capteur DHT22** température/humidité (pin 40)
+- **🔧 Interface série CLI** avec commandes de contrôle
+- **📊 Boucle stable** avec polling 2s (sensors/inputs)
+- **💾 Très bon rendement mémoire** : 5.9% RAM, 8.8% Flash utilisés
 
-### 🔄 En Attente (développement suspendu)
-- **💻 Interface Web responsive**
+### 🔄 En Développement (SESSION 3+)
+- **💻 Interface Web HTTP** - Architecture prête, besoin bibliothèque AsyncWebServer
 - **⚡ API REST** pour intégration externe
-- **🏭 Modbus TCP** pour intégration industrielle
+- **📡 MQTT Integration** - Broker credentials ready (192.168.1.200:1883, pascal/123456)
+- **🏭 Modbus TCP** (future)
 
-## 🎮 Commandes Disponibles
+## 🎮 Commandes Disponibles (Série - 9600 baud)
 
 ```
-help        - Affiche l'aide complète
-status      - État du système complet
-scan        - Scan des périphériques I2C
-testio      - Test des entrées/sorties
-pins        - Informations sur les pins
-testpins    - Test différentes combinaisons I2C
-relay X on  - Active le relais X (1-8)
-relay X off - Désactive le relais X (1-8)
+help              - Affiche l'aide
+relay X on        - Allume relais X (0-7)
+relay X off       - Éteint relais X (0-7)
+test              - Cycle tous les relais pour test
 ```
 
 ## 🌐 Interfaces Disponibles
@@ -150,17 +145,43 @@ pins
 - Vérifier la connexion du câble Ethernet
 - Pins W5500 configurés selon schéma Waveshare officiel
 
-## 📊 État du Projet
+## 📊 État du Projet (SESSION 3 UPDATES)
 
 | Composant | État | Notes |
 |-----------|------|-------|
-| TCA9554 Relais | ✅ OK | Pins officiels Waveshare |
-| Entrées Digitales | ✅ OK | Pins 4-11 avec pull-up |
-| Interface Série | ✅ OK | Commandes complètes |
-| Diagnostic I2C | ✅ OK | Scan et test pins |
-| Modbus TCP | ✅ OK | Port 502, registres configurés |
-| Ethernet W5500 | 🔧 Config | Nécessite connexion physique |
-| DHT22 | 🔧 Config | Pin 12 configuré |
+| TCA9554 Relais (8x) | ✅ OPÉRATIONNEL | Tous testés via série - I2C @ 0x20 |
+| Entrées Digitales (8x) | ✅ OPÉRATIONNEL | Toutes 8 lisent correctement |
+| Ethernet W5500 | ✅ CONNECTÉ | IP 192.168.1.50, stable |
+| Interface Série CLI | ✅ OPÉRATIONNEL | Commandes relay/test/help |
+| Capteur DHT22 | 🟡 CONFIG | Initialized, mais sensor non physiquement détecté |
+| Interface Web HTTP | 🟡 EN COURS | HTML/CSS prêts, besoin serveur HTTP |
+| API REST | ⏳ À FAIRE | Design prêt, implémentation après HTTP |
+| MQTT Integration | ⏳ À FAIRE | Broker credentials: 192.168.1.200:1883 |
+| Modbus TCP | ⏳ À FAIRE | Future enhancement |
+
+## 🧪 Résultats de Test (SESSION 3)
+
+**Test de Relais via CLI Sérielle:**
+```
+>>> relay 0 on
+✓ Relais 1: ON (TCA9554 @ 0x20 bit 0)
+>>> relay 0 off
+✓ Relais 1: OFF (TCA9554 @ 0x20 bit 0)
+>>> test
+✓ All 8 relays cycled ON/OFF successfully
+```
+
+**Lecture des Entrées:**
+```
+Entrées: 1 1 1 1 1 0 1 1  ← Entrée 6 détectée LOW (physique confirmée)
+```
+
+**Métriques de Performance:**
+- RAM: 19.3KB / 320KB (5.9%)
+- Flash: 302KB / 3.3MB (8.8%)
+- Boot time: ~2s
+- Loop rate: 2s (polling)
+- Compilation: 9-20s
 
 ## 🏗️ Architecture
 

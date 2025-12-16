@@ -1,3 +1,30 @@
+#include <WebServer.h> // Ajout pour serveur web
+WebServer server(80); // Serveur web sur port 80
+// --- Fonctions pour interface web ---
+String htmlPage() {
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>ESP32S3-8DI8RO</title>";
+  html += "<style>body{font-family:sans-serif;}button{margin:2px;}</style></head><body>";
+  html += "<h2>ESP32S3-8DI8RO - Interface Web</h2>";
+  html += "<h3>Température: " + String(temperature, 1) + "°C | Humidité: " + String(humidity, 1) + "%</h3>";
+  html += "<h4>Relais</h4><form method='POST'>";
+  for (int i = 0; i < 8; i++) {
+    html += "Relais " + String(i+1) + ": ";
+    html += relayStates[i] ? "<b>ON</b>" : "OFF";
+    html += " <button name='relay' value='" + String(i+1) + (relayStates[i] ? "_off" : "_on") + "'>";
+    html += relayStates[i] ? "OFF" : "ON";
+    html += "</button><br>";
+  }
+  html += "</form>";
+  html += "<h4>Entrées digitales</h4><ul>";
+  for (int i = 0; i < 8; i++) {
+    html += "<li>Entrée " + String(i+1) + ": " + (inputStates[i] ? "HIGH" : "LOW") + "</li>";
+  }
+  html += "</ul>";
+  html += "<hr><small>MAJ auto toutes les 5s<script>setTimeout(()=>location.reload(),5000);</script></small>";
+  html += "</body></html>";
+  return html;
+}
+// --- Fin fonctions web ---
 #include <Arduino.h>
 #include <Ethernet.h>
 #include <Wire.h>
@@ -142,6 +169,23 @@ void testTCA9554() {
 }
 
 void setup() {
+  // --- Ajout serveur web ---
+  server.on("/", HTTP_GET, []() {
+    server.send(200, "text/html", htmlPage());
+  });
+  server.on("/", HTTP_POST, []() {
+    if (server.hasArg("relay")) {
+      String arg = server.arg("relay");
+      int num = arg.substring(0, arg.indexOf('_')).toInt();
+      bool state = arg.endsWith("_on");
+      if (num >= 1 && num <= 8) setRelay(num-1, state); // setRelay doit exister
+    }
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  });
+  server.begin();
+  Serial.println("✓ Serveur web démarré sur port 80");
+  // --- Fin ajout serveur web ---
   // Initialisation série avec délai pour démarrage
   Serial.begin(9600);
   delay(2000);
@@ -230,6 +274,7 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient(); // Gestion requêtes web
   Ethernet.maintain();
   
   // Lecture des capteurs et entrées toutes les 2 secondes
