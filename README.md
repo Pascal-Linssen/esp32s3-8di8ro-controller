@@ -4,30 +4,63 @@
 
 ## 📋 Description
 
-✅ **SYSTÈME OPÉRATIONNEL** - Contrôleur industriel pour carte Waveshare ESP32-S3-ETH-8DI-8RO avec Ethernet, MQTT et contrôle de 8 relais + 8 entrées digitales.
+**Contrôleur industriel** pour carte Waveshare ESP32-S3-ETH-8DI-8RO
+- **Ethernet W5500** - Connectivité réseau stable
+- **8 Relays + 8 Inputs** - TCA9554 I2C
+- **MQTT** - Publication des statuts
+- **Configuration SPIFFS** - Persistent settings
+- **Firmware v1.6** - En développement
 
-## ✨ Fonctionnalités
+## ✨ Statut des Fonctionnalités
 
-### ✅ Opérationnelles (v1.5 - SESSION 3)
-- **🌐 Ethernet W5500** avec IP statique (192.168.1.50) - TESTÉ ✓
-- **🔌 8 Relais contrôlables** via TCA9554 I2C (pins SDA=42, SCL=41) - **TOUS LES 8 TESTÉS ✓**
-- **📥 8 Entrées digitales** avec pull-up interne (pins 4-11) - TOUS LES 8 TESTÉS ✓
-- **🌡️ Capteur DHT22** température/humidité (pin 40)
-- **🔧 Interface série CLI** avec commandes de contrôle
-- **📊 Boucle stable** avec polling 2s (sensors/inputs)
-- **💾 Très bon rendement mémoire** : 5.9% RAM, 8.8% Flash utilisés
+| Fonctionnalité | v1.5 | v1.6 | Status |
+|---|---|---|---|
+| Hardware (Relays, Inputs, Ethernet) | ✅ | ✅ | **VALIDÉ** |
+| MQTT Publish (Statuts) | ❌ | ✅ | **FONCTIONNEL** |
+| MQTT Subscribe (Commands) | ❌ | 🟡 | **EN DEBUG** |
+| SPIFFS Config Persistence | ❌ | ✅ | **FONCTIONNEL** |
+| Serial CLI | ✅ | ✅ | **FONCTIONNEL** |
+| Web Interface HTTP | ⚠️ | ⚠️ | *Stub seulement* |
+| Home Assistant Discovery | ❌ | ❌ | *À faire* |
 
-### 🔄 En Développement (SESSION 3+)
-- **💻 Interface Web HTTP** - Architecture prête, besoin bibliothèque AsyncWebServer
-- **⚡ API REST** pour intégration externe
-- **📡 MQTT Integration** - Broker credentials ready (192.168.1.200:1883, pascal/123456)
-- **🏭 Modbus TCP** (future)
+## 🚀 Configuration & Setup
 
-## 🎮 Commandes Disponibles (Série - 9600 baud)
+### Installation
+
+```bash
+git clone https://github.com/Pascal-Linssen/esp32s3-8di8ro-controller.git
+cd esp32s3-8di8ro-controller
+python -m platformio run -e esp32s3 -t upload
+```
+
+### Configuration MQTT (v1.6)
+
+**Broker**: `192.168.1.200:1883`
+**Auth**: `pascal / 123456`
+
+#### Configuration Persistente
+
+Option 1 - Python CLI:
+```bash
+python configure_mqtt.py
+```
+
+Option 2 - Auto au démarrage:
+- SPIFFS charge `/config.json` automatiquement
+- Defaults en cas de fichier manquant
+
+### Topics MQTT
 
 ```
-help              - Affiche l'aide
-relay X on        - Allume relais X (0-7)
+home/esp32/relay/status     ← JSON: [0,0,1,0,0,0,0,0]
+home/esp32/input/status     ← Entrées digitales
+home/esp32/sensor/status    ← Temp/Humidité
+home/esp32/system/status    ← Infos système
+
+home/esp32/relay/cmd        → Format: "0:on", "1:off", "ALL:on"  [⚠️ EN DEBUG]
+```
+
+## 🔧 Commandes Série (9600 baud)
 relay X off       - Éteint relais X (0-7)
 test              - Cycle tous les relais pour test
 ```
