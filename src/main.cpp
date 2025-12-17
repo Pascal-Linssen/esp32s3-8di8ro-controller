@@ -187,7 +187,7 @@ String getHtmlPage() {
   html += ".relay-btn:hover {opacity:0.8;}";
   html += ".relay-btn:active {transform:scale(0.98);}";
   html += ".input-item {padding:15px;border:2px solid #1c5a41;border-radius:5px;text-align:center;}";
-  // Entrées: style automatisme (HIGH=bleu, LOW=jaune)
+  // Entrées: logique active-bas (ACTIVE=LOW=jaune, INACTIVE=HIGH=bleu)
   html += ".input-item.high {background:#0a1324;border-color:#2563eb;}";
   html += ".input-item.low {background:#1a1406;border-color:#d97706;}";
   html += ".input-num {font-size:14px;color:#b7d7c8;margin-bottom:10px;}";
@@ -270,17 +270,19 @@ String getHtmlPage() {
   html += "<h2>Entrees Digitales (8)</h2>";
   html += "<div class='grid4'>";
   for (int i = 0; i < 8; i++) {
-    bool isHigh = inputStates[i];
+    // inputStates[i] == true  => entrée ACTIVE (niveau bas, INPUT_PULLUP)
+    bool isActive = inputStates[i];
     html += "<div id='input_";
     html += String(i + 1);
     html += "' class='input-item ";
-    html += (isHigh ? "high" : "low");
+    // Couleurs conservées: HIGH=bleu, LOW=jaune
+    html += (isActive ? "low" : "high");
     html += "'><div class='input-num'>Entrée ";
     html += String(i+1);
     html += "</div><div class='input-status' id='input_status_";
     html += String(i + 1);
     html += "'>";
-    html += (isHigh ? "HIGH" : "LOW");
+    html += (isActive ? "ACTIVE" : "INACTIVE");
     html += "</div></div>";
   }
   html += "</div></div>";
@@ -347,9 +349,9 @@ String getHtmlPage() {
   html += "var btn=document.getElementById('relay_btn_'+n); if(btn){ setClass(btn,'on','off',isOn); btn.textContent=isOn?'Toggle (actuellement ON)':'Toggle (actuellement OFF)'; }";
   html += "}}";
   html += "if(Array.isArray(s.i)){";
-  html += "for(var j=0;j<Math.min(8,s.i.length);j++){var n2=j+1; var isHigh=!!s.i[j];";
-  html += "var ib=document.getElementById('input_'+n2); setClass(ib,'high','low',isHigh);";
-  html += "var ist=document.getElementById('input_status_'+n2); if(ist) ist.textContent=isHigh?'HIGH':'LOW';";
+  html += "for(var j=0;j<Math.min(8,s.i.length);j++){var n2=j+1; var isActive=!!s.i[j];";
+  html += "var ib=document.getElementById('input_'+n2); setClass(ib,'low','high',isActive);";
+  html += "var ist=document.getElementById('input_status_'+n2); if(ist) ist.textContent=isActive?'ACTIVE':'INACTIVE';";
   html += "}}";
   html += "}).catch(function(){});}";
   html += "function loadConfig(){fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){";
