@@ -18,10 +18,10 @@ BASEDIR = Path(__file__).parent
 # MQTT Configuration
 MQTT_BROKER = "192.168.1.200"
 MQTT_PORT = 1883
-MQTT_RELAY_CMD_TOPIC = "home/esp32/relay/cmd"
-MQTT_RELAY_STATE_TOPIC = "home/esp32/relay/state"
-MQTT_INPUT_STATE_TOPIC = "home/esp32/input/state"
-MQTT_SENSOR_TOPIC = "home/esp32/sensor"
+MQTT_RELAY_CMD_TOPIC = "waveshare/relay/cmd"
+MQTT_RELAY_STATE_TOPIC = "waveshare/relay/state"
+MQTT_INPUT_STATE_TOPIC = "waveshare/input/state"
+MQTT_SENSOR_TOPIC = "waveshare/sensor"
 
 # Global state
 class SystemState:
@@ -61,12 +61,12 @@ def init_mqtt():
         print(f"[MQTT] Connecté au broker ({reason_code})")
         state.mqtt_connected = True
         # Subscribe to all status topics
-        client.subscribe("home/esp32/relay/status")
-        client.subscribe("home/esp32/relay/state")
-        client.subscribe("home/esp32/input/status")
-        client.subscribe("home/esp32/input/state")
-        client.subscribe("home/esp32/sensor/status")
-        client.subscribe("home/esp32/sensor")
+        client.subscribe("waveshare/relay/status")
+        client.subscribe("waveshare/relay/state")
+        client.subscribe("waveshare/input/status")
+        client.subscribe("waveshare/input/state")
+        client.subscribe("waveshare/sensor/status")
+        client.subscribe("waveshare/sensor")
         print("[MQTT] ✓ Subscriptions établies")
     
     def on_disconnect(client, userdata, reason_code):

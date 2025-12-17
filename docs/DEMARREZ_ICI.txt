@@ -124,8 +124,8 @@ AVANT (PubSubClient ❌):              APRÈS (256dpi/MQTT ✅):
 
 ```bash
 ✅ Console série: "MQTT connected!"
-✅ Console série: "Subscribed to: home/esp32/relay/cmd"
-✅ Envoyer MQTT: mosquitto_pub ... -m "0:on"
+✅ Console série: "Subscribed to: waveshare/relay/cmd"
+✅ Envoyer MQTT: mosquitto_pub ... -t waveshare/relay/cmd -m "0:on"
 ✅ Console série: "🎯 MQTT MESSAGE RECEIVED #1!"
 ✅ Console série: "✓ Relay 0: ON"
 ✅ Relais physique: Change d'état ✅

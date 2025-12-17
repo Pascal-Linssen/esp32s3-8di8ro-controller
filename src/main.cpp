@@ -6,7 +6,12 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <SPIFFS.h>
+#include <Update.h>
 #include "web_config.h"
+
+#ifndef ENABLE_OTA_HTTP
+#define ENABLE_OTA_HTTP 0
+#endif
 
 // ESP32 Arduino core's Server interface requires begin(uint16_t).
 // The Arduino Ethernet library's EthernetServer implements begin() with no args.
@@ -48,15 +53,17 @@ uint16_t mqttPort = 1883;
 // Ne pas stocker de credentials en dur dans le firmware (configurable via SPIFFS / interface Web).
 char mqttUser[50] = "";
 char mqttPassword[50] = "";
+// Clé OTA (optionnelle). Si vide: OTA refusée.
+char otaKey[64] = "";
 const char* mqttClientID = "ESP32-S3-ETH";
 const char* CONFIG_FILE = "/config.json";
 
 // MQTT Topics
-char topicRelayCmd[100] = "home/esp32/relay/cmd";
-char topicRelayStatus[100] = "home/esp32/relay/status";
-char topicInputStatus[100] = "home/esp32/input/status";
-char topicSensorStatus[100] = "home/esp32/sensor/status";
-char topicSystemStatus[100] = "home/esp32/system/status";
+char topicRelayCmd[100] = "waveshare/relay/cmd";
+char topicRelayStatus[100] = "waveshare/relay/status";
+char topicInputStatus[100] = "waveshare/input/status";
+char topicSensorStatus[100] = "waveshare/sensor/status";
+char topicSystemStatus[100] = "waveshare/system/status";
 
 // Pins des entrées digitales
 const int digitalInputs[8] = {4, 5, 6, 7, 8, 9, 10, 11};
@@ -68,7 +75,7 @@ DHT dht(DHT_PIN, DHT_TYPE);
 float temperature = 0.0;
 float humidity = 0.0;
 bool relayStates[8] = {false};
-bool inputStates[8] = {true};
+bool inputStates[8] = {false};
 bool serverStarted = false;
 
 // Variables pour serveur HTTP simple
@@ -129,7 +136,8 @@ void setRelay(int relay, bool state) {
 
 void readInputs() {
   for (int i = 0; i < 8; i++) {
-    inputStates[i] = digitalRead(digitalInputs[i]);
+    // Entrées en INPUT_PULLUP: actif = niveau bas (0)
+    inputStates[i] = (digitalRead(digitalInputs[i]) == LOW);
   }
 }
 
@@ -392,7 +400,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.printf("   Expected: %s\n", topicRelayCmd);
   Serial.printf("   Match: %s\n", (topicStr == topicRelayCmd) ? "OUI" : "NON");
   
-  // Parser commandes de relais: home/esp32/relay/cmd
+  // Parser commandes de relais: waveshare/relay/cmd
   if (topicStr == topicRelayCmd) {
     Serial.println("✓ Topic reconnu - parsing...");
     
@@ -603,6 +611,7 @@ void handleHttpLoop() {
   requestLine.trim();
 
   size_t contentLength = 0;
+  String otaKeyHeader = "";
   // Read headers
   while (client.connected()) {
     String line = client.readStringUntil('\n');
@@ -610,6 +619,13 @@ void handleHttpLoop() {
     if (line.length() == 0) break;
     if (line.startsWith("Content-Length:")) {
       contentLength = (size_t)line.substring(String("Content-Length:").length()).toInt();
+    } else {
+      String lower = line;
+      lower.toLowerCase();
+      if (lower.startsWith("x-ota-key:")) {
+        otaKeyHeader = line.substring(String("X-OTA-Key:").length());
+        otaKeyHeader.trim();
+      }
     }
   }
 
@@ -630,6 +646,128 @@ void handleHttpLoop() {
     path = target.substring(0, q);
     query = target.substring(q + 1);
   }
+
+#if ENABLE_OTA_HTTP
+  if (method == "POST" && path == "/api/ota") {
+    DynamicJsonDocument resp(256);
+
+    if (otaKey[0] == '\0') {
+      resp["ok"] = 0;
+      resp["error"] = "ota_key_not_set";
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "403 Forbidden", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    if (otaKeyHeader.length() == 0 || otaKeyHeader != String(otaKey)) {
+      resp["ok"] = 0;
+      resp["error"] = "bad_ota_key";
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "401 Unauthorized", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    if (contentLength == 0) {
+      resp["ok"] = 0;
+      resp["error"] = "missing_content_length";
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "411 Length Required", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    Serial.printf("OTA: starting update (%u bytes)\n", (unsigned)contentLength);
+    if (!Update.begin(contentLength)) {
+      resp["ok"] = 0;
+      resp["error"] = "update_begin_failed";
+      resp["code"] = (int)Update.getError();
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "500 Internal Server Error", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    size_t received = 0;
+    uint32_t lastData = millis();
+    uint8_t buf[1024];
+    while (received < contentLength && client.connected()) {
+      int avail = client.available();
+      if (avail > 0) {
+        size_t toRead = (size_t)avail;
+        if (toRead > sizeof(buf)) toRead = sizeof(buf);
+        if (toRead > (contentLength - received)) toRead = (contentLength - received);
+        int n = client.read(buf, (int)toRead);
+        if (n > 0) {
+          size_t w = Update.write(buf, (size_t)n);
+          if (w != (size_t)n) {
+            Update.abort();
+            resp["ok"] = 0;
+            resp["error"] = "update_write_failed";
+            resp["code"] = (int)Update.getError();
+            String out;
+            serializeJson(resp, out);
+            sendHttp(client, "500 Internal Server Error", "application/json", out);
+            delay(5);
+            client.stop();
+            return;
+          }
+          received += (size_t)n;
+          lastData = millis();
+        }
+      } else {
+        if (millis() - lastData > 5000) break;
+        delay(1);
+      }
+    }
+
+    if (received != contentLength) {
+      Update.abort();
+      resp["ok"] = 0;
+      resp["error"] = "incomplete_upload";
+      resp["received"] = (unsigned)received;
+      resp["expected"] = (unsigned)contentLength;
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "400 Bad Request", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    bool ok = Update.end(true);
+    if (!ok) {
+      resp["ok"] = 0;
+      resp["error"] = "update_end_failed";
+      resp["code"] = (int)Update.getError();
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "500 Internal Server Error", "application/json", out);
+      delay(5);
+      client.stop();
+      return;
+    }
+
+    resp["ok"] = 1;
+    resp["reboot"] = 1;
+    String out;
+    serializeJson(resp, out);
+    sendHttp(client, "200 OK", "application/json", out);
+
+    delay(250);
+    ESP.restart();
+    return;
+  }
+#endif
 
   String body = "";
   if (method == "POST" && contentLength > 0) {
@@ -672,6 +810,7 @@ void handleHttpLoop() {
     doc["broker_ip"] = mqttServer.toString();
     doc["broker_port"] = mqttPort;
     doc["username"] = mqttUser;
+    doc["ota_key_set"] = (otaKey[0] != '\0') ? 1 : 0;
     doc["mqtt_connected"] = mqttConnected ? 1 : 0;
     String out;
     serializeJson(doc, out);
@@ -739,6 +878,13 @@ void handleHttpLoop() {
         const char *pw = doc["password"].as<const char*>();
         if (pw && strlen(pw) > 0) {
           strlcpy(mqttPassword, pw, sizeof(mqttPassword));
+        }
+      }
+
+      if (doc.containsKey("ota_key")) {
+        const char *k = doc["ota_key"].as<const char*>();
+        if (k) {
+          strlcpy(otaKey, k, sizeof(otaKey));
         }
       }
 

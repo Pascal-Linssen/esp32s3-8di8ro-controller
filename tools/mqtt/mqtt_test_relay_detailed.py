@@ -66,7 +66,7 @@ for relay_num in range(3):
     
     # Allumer
     print(f"  📤 Envoi: {relay_num}:on")
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:on", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:on", qos=1)
     
     print(f"  ⏳ Attente 3s...")
     for i in range(3):
@@ -77,7 +77,7 @@ for relay_num in range(3):
     
     # Éteindre
     print(f"  📤 Envoi: {relay_num}:off")
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:off", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:off", qos=1)
     
     print(f"  ⏳ Attente 3s...")
     for i in range(3):

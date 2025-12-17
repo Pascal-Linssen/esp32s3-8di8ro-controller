@@ -74,7 +74,7 @@ tests = [
 for cmd, desc in tests:
     print(f"\n📤 {desc}")
     print(f"   Envoi: {cmd}")
-    client.publish("home/esp32/relay/cmd", cmd, qos=1)
+    client.publish("waveshare/relay/cmd", cmd, qos=1)
     
     print(f"   ⏳ Attente 2s...")
     time.sleep(2)

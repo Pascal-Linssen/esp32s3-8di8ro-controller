@@ -166,12 +166,12 @@ void loop() {
 Après installation, vous devriez voir dans la console :
 ```
 ✅ MQTT connected!
-✓ Subscribed to: home/esp32/relay/cmd
+✓ Subscribed to: waveshare/relay/cmd
 
 ... envoyer une commande MQTT ...
 
 🎯 MQTT MESSAGE RECEIVED #1!     ← CE MESSAGE NE VENAIT JAMAIS AVANT
-   Topic: home/esp32/relay/cmd
+  Topic: waveshare/relay/cmd
    Payload: 0:on
 ✓ Relay 0: ON
 ```

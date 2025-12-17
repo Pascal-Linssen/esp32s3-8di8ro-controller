@@ -100,8 +100,8 @@
 
 1. **MQTT Integration**
    - Connect to broker: 192.168.1.200:1883
-   - Publish: `home/esp32/relay/[0-7]` = on/off
-   - Subscribe: `home/esp32/relay/[0-7]/cmd` = on/off/toggle
+   - Publish: `waveshare/relay/[0-7]` = on/off
+   - Subscribe: `waveshare/relay/[0-7]/cmd` = on/off/toggle
 
 2. **WebSocket Support** (real-time updates)
    - Server-sent events or WebSocket

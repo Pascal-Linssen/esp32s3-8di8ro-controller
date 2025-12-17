@@ -273,12 +273,12 @@ pio run
 4. **Envoyer** un message MQTT :
    ```bash
    mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> \
-     -t home/esp32/relay/cmd -m "0:on"
+    -t waveshare/relay/cmd -m "0:on"
    ```
 5. **Vérifier** la console : vous devriez voir
    ```
    🎯 MQTT MESSAGE RECEIVED #1!
-      Topic: home/esp32/relay/cmd
+      Topic: waveshare/relay/cmd
       Payload: 0:on
    ✓ Relay 0: ON
    ```

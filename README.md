@@ -42,12 +42,12 @@ Note : adapte `monitor_port` dans [platformio.ini](platformio.ini) (ex: `COM8`).
 Topics utilisés (référence projet) :
 
 ```
-home/esp32/relay/status
-home/esp32/input/status
-home/esp32/sensor/status
-home/esp32/system/status
+waveshare/relay/status
+waveshare/input/status
+waveshare/sensor/status
+waveshare/system/status
 
-home/esp32/relay/cmd        (ex: "0:on", "0:off", "ALL:on")
+waveshare/relay/cmd        (ex: "0:on", "0:off", "ALL:on")
 ```
 
 ## Câblage (pins)

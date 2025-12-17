@@ -18,11 +18,11 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 CLIENT_ID = "mqtt-tester"
 
 # Topics
-TOPIC_RELAY_CMD = "home/esp32/relay/cmd"
-TOPIC_RELAY_STATUS = "home/esp32/relay/status"
-TOPIC_INPUT_STATUS = "home/esp32/input/status"
-TOPIC_SENSOR_STATUS = "home/esp32/sensor/status"
-TOPIC_SYSTEM_STATUS = "home/esp32/system/status"
+TOPIC_RELAY_CMD = "waveshare/relay/cmd"
+TOPIC_RELAY_STATUS = "waveshare/relay/status"
+TOPIC_INPUT_STATUS = "waveshare/input/status"
+TOPIC_SENSOR_STATUS = "waveshare/sensor/status"
+TOPIC_SYSTEM_STATUS = "waveshare/system/status"
 
 # Variables globales
 received_messages = {}

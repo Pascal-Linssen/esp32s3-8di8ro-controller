@@ -65,7 +65,7 @@ python3 test_mqtt_fixed.py
 Ouvrez la console et vous devriez voir :
 ```
 🎯 MQTT MESSAGE RECEIVED #1!
-   Topic: home/esp32/relay/cmd
+  Topic: waveshare/relay/cmd
    Payload: 0:on
 ✓ Relay 0: ON
 ```

@@ -18,11 +18,11 @@ BROKER_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 CLIENT_ID = "test-script"
 
 # Topics
-RELAY_CMD_TOPIC = "home/esp32/relay/cmd"
-RELAY_STATUS_TOPIC = "home/esp32/relay/status"
-INPUT_STATUS_TOPIC = "home/esp32/input/status"
-SENSOR_STATUS_TOPIC = "home/esp32/sensor/status"
-SYSTEM_STATUS_TOPIC = "home/esp32/system/status"
+RELAY_CMD_TOPIC = "waveshare/relay/cmd"
+RELAY_STATUS_TOPIC = "waveshare/relay/status"
+INPUT_STATUS_TOPIC = "waveshare/input/status"
+SENSOR_STATUS_TOPIC = "waveshare/sensor/status"
+SYSTEM_STATUS_TOPIC = "waveshare/system/status"
 
 # Test tracking
 test_results = {

@@ -9,7 +9,7 @@
 │                                                         │
 │  ✅ Ethernet Connected      192.168.1.50              │
 │  ✅ MQTT Connected          Connected to broker       │
-│  ✅ MQTT Subscribed         home/esp32/relay/cmd      │
+│  ✅ MQTT Subscribed         waveshare/relay/cmd       │
 │                                                         │
 │  📨 Message Arrives on Topic                           │
 │     → W5500 receives data                              │

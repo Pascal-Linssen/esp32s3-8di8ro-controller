@@ -11,7 +11,7 @@ BROKER = "192.168.1.200"
 PORT = 1883
 USER = os.getenv("MQTT_USERNAME", "")
 PASSWORD = os.getenv("MQTT_PASSWORD", "")
-TOPIC_CMD = "home/esp32/relay/cmd"
+TOPIC_CMD = "waveshare/relay/cmd"
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:

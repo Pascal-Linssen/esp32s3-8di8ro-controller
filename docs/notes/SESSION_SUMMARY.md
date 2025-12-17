@@ -26,11 +26,11 @@ Client ID: ESP32-S3-ETH
 ```
 
 ### MQTT Topics (Fonctionnels)
-- ✅ `home/esp32/relay/status` - Publication JSON array [0,0,0,0,0,0,0,0]
-- ✅ `home/esp32/input/status` - Entrées digitales
-- ✅ `home/esp32/sensor/status` - Température/Humidité
-- ✅ `home/esp32/system/status` - Infos système
-- 🟡 `home/esp32/relay/cmd` - **PROBLÉMATIQUE** (voir section suivante)
+- ✅ `waveshare/relay/status` - Publication JSON array [0,0,0,0,0,0,0,0]
+- ✅ `waveshare/input/status` - Entrées digitales
+- ✅ `waveshare/sensor/status` - Température/Humidité
+- ✅ `waveshare/system/status` - Infos système
+- 🟡 `waveshare/relay/cmd` - **PROBLÉMATIQUE** (voir section suivante)
 
 ---
 
@@ -150,7 +150,7 @@ Config/
 
 3. **Tester avec mosquitto** sur PC:
    ```bash
-   mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
+   mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "waveshare/relay/cmd" -v
    # Puis envoyer: mosquitto_pub ... -m "0:on"
    ```
 

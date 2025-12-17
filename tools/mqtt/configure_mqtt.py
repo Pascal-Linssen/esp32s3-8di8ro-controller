@@ -15,11 +15,11 @@ DEFAULT_CONFIG = {
     "broker_port": 1883,
     "username": "",
     "password": "",
-    "topic_relay_cmd": "home/esp32/relay/cmd",
-    "topic_relay_status": "home/esp32/relay/status",
-    "topic_input_status": "home/esp32/input/status",
-    "topic_sensor_status": "home/esp32/sensor/status",
-    "topic_system_status": "home/esp32/system/status"
+    "topic_relay_cmd": "waveshare/relay/cmd",
+    "topic_relay_status": "waveshare/relay/status",
+    "topic_input_status": "waveshare/input/status",
+    "topic_sensor_status": "waveshare/sensor/status",
+    "topic_system_status": "waveshare/system/status"
 }
 
 def load_config():

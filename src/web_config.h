@@ -15,6 +15,7 @@ extern IPAddress mqttServer;
 extern uint16_t mqttPort;
 extern char mqttUser[50];
 extern char mqttPassword[50];
+extern char otaKey[64];
 extern char topicRelayCmd[100];
 extern char topicRelayStatus[100];
 extern char topicInputStatus[100];
@@ -37,6 +38,16 @@ static bool parseIpString(const String &ip, IPAddress &out) {
   if (sscanf(ip.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) != 4) return false;
   out = IPAddress(parts[0], parts[1], parts[2], parts[3]);
   return true;
+}
+
+static void migrateTopicPrefix(char *topic, size_t topicSize, const char *oldPrefix, const char *newPrefix) {
+  if (!topic || topicSize == 0 || !oldPrefix || !newPrefix) return;
+  size_t oldLen = strlen(oldPrefix);
+  if (oldLen == 0) return;
+  if (strncmp(topic, oldPrefix, oldLen) != 0) return;
+
+  String migrated = String(newPrefix) + String(topic + oldLen);
+  strlcpy(topic, migrated.c_str(), topicSize);
 }
 
 void loadMQTTConfig() {
@@ -67,12 +78,20 @@ void loadMQTTConfig() {
     mqttPort = doc["broker_port"] | 1883;
     strlcpy(mqttUser, doc["username"] | "", sizeof(mqttUser));
     strlcpy(mqttPassword, doc["password"] | "", sizeof(mqttPassword));
+    strlcpy(otaKey, doc["ota_key"] | "", sizeof(otaKey));
     
-    strlcpy(topicRelayCmd, doc["topic_relay_cmd"] | "home/esp32/relay/cmd", sizeof(topicRelayCmd));
-    strlcpy(topicRelayStatus, doc["topic_relay_status"] | "home/esp32/relay/status", sizeof(topicRelayStatus));
-    strlcpy(topicInputStatus, doc["topic_input_status"] | "home/esp32/input/status", sizeof(topicInputStatus));
-    strlcpy(topicSensorStatus, doc["topic_sensor_status"] | "home/esp32/sensor/status", sizeof(topicSensorStatus));
-    strlcpy(topicSystemStatus, doc["topic_system_status"] | "home/esp32/system/status", sizeof(topicSystemStatus));
+    strlcpy(topicRelayCmd, doc["topic_relay_cmd"] | "waveshare/relay/cmd", sizeof(topicRelayCmd));
+    strlcpy(topicRelayStatus, doc["topic_relay_status"] | "waveshare/relay/status", sizeof(topicRelayStatus));
+    strlcpy(topicInputStatus, doc["topic_input_status"] | "waveshare/input/status", sizeof(topicInputStatus));
+    strlcpy(topicSensorStatus, doc["topic_sensor_status"] | "waveshare/sensor/status", sizeof(topicSensorStatus));
+    strlcpy(topicSystemStatus, doc["topic_system_status"] | "waveshare/system/status", sizeof(topicSystemStatus));
+
+    // Migration automatique: ancien préfixe -> nouveau
+    migrateTopicPrefix(topicRelayCmd, sizeof(topicRelayCmd), "home/esp32/", "waveshare/");
+    migrateTopicPrefix(topicRelayStatus, sizeof(topicRelayStatus), "home/esp32/", "waveshare/");
+    migrateTopicPrefix(topicInputStatus, sizeof(topicInputStatus), "home/esp32/", "waveshare/");
+    migrateTopicPrefix(topicSensorStatus, sizeof(topicSensorStatus), "home/esp32/", "waveshare/");
+    migrateTopicPrefix(topicSystemStatus, sizeof(topicSystemStatus), "home/esp32/", "waveshare/");
     
     Serial.println("✓ MQTT config loaded from SPIFFS");
   }
@@ -94,6 +113,7 @@ void saveMQTTConfig() {
   doc["broker_port"] = mqttPort;
   doc["username"] = mqttUser;
   doc["password"] = mqttPassword;
+  doc["ota_key"] = otaKey;
   doc["topic_relay_cmd"] = topicRelayCmd;
   doc["topic_relay_status"] = topicRelayStatus;
   doc["topic_input_status"] = topicInputStatus;

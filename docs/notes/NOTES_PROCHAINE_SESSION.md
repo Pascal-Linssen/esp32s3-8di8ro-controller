@@ -65,14 +65,14 @@ if (millis() - last_subscribe > 30000) {  // Tous les 30s
 ### 4. **Tester avec mosquitto sur PC**
 ```bash
 # Terminal 1: Écouter les commandes reçues par broker
- mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
+mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "waveshare/relay/cmd" -v
 
 # Terminal 2: Envoyer une commande
- mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -m "0:on"
+mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "waveshare/relay/cmd" -m "0:on"
 
 # Remplace par tes valeurs (exemple):
-# mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
-# mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -m "0:on"
+# mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "waveshare/relay/cmd" -v
+# mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "waveshare/relay/cmd" -m "0:on"
 ```
 → Si mosquitto_sub reçoit le message mais ESP32 non = problème subscribe  
 → Si mosquitto_sub ne reçoit rien = problème publish côté client test
@@ -82,8 +82,8 @@ if (millis() - last_subscribe > 30000) {  // Tous les 30s
 ## 🔍 Hypothèses À Investiguer
 
 ### Hypothèse 1: Topic mismatch
-- ESP32 subscribe à: `home/esp32/relay/cmd` 
-- On publie à: `home/esp32/relay/cmd`
+- ESP32 subscribe à: `waveshare/relay/cmd` 
+- On publie à: `waveshare/relay/cmd`
 - **Verdict**: À confirmer avec debug
 
 ### Hypothèse 2: PubSubClient.loop() ne déclenche pas callback

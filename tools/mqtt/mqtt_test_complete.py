@@ -72,7 +72,7 @@ try:
     print("TEST COMPLET MQTT - COMMANDS & RESPONSES")
     print("="*60)
     
-    topic = "home/esp32/relay/cmd"
+    topic = "waveshare/relay/cmd"
     
     # Test des commandes progressives
     test_commands = [

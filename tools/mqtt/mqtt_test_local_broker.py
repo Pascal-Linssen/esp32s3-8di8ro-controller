@@ -61,7 +61,7 @@ class SimpleMQTTBroker:
                 # Traiter les messages MQTT (simplifié)
                 while len(buffer) > 0:
                     # Chercher les patterns de publication/souscription
-                    if b'home/esp32/' in buffer:
+                    if b'waveshare/' in buffer:
                         self._process_mqtt_data(buffer, client)
                     buffer = buffer[len(buffer):]
                     break
@@ -81,7 +81,7 @@ class SimpleMQTTBroker:
             text = data.decode('utf-8', errors='ignore')
             
             # Afficher les topics
-            if 'home/esp32/' in text:
+            if 'waveshare/' in text:
                 print(f"📨 {datetime.now().strftime('%H:%M:%S')} | Reçu: {text[:100]}")
                 
         except:

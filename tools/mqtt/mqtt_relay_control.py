@@ -16,8 +16,8 @@ BROKER_USER = os.getenv("MQTT_USERNAME", "")
 BROKER_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 CLIENT_ID = "web-remote-control"
 
-RELAY_CMD_TOPIC = "home/esp32/relay/cmd"
-RELAY_STATUS_TOPIC = "home/esp32/relay/status"
+RELAY_CMD_TOPIC = "waveshare/relay/cmd"
+RELAY_STATUS_TOPIC = "waveshare/relay/status"
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:

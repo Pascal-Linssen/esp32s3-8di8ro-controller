@@ -85,15 +85,15 @@ if last_system_status:
 # Envoyer des commandes
 print(f"\n📤 Envoi des commandes test...")
 print(f"   Commande 1: 0:on")
-client.publish("home/esp32/relay/cmd", "0:on", qos=1)
+client.publish("waveshare/relay/cmd", "0:on", qos=1)
 time.sleep(1)
 
 print(f"   Commande 2: 1:on")
-client.publish("home/esp32/relay/cmd", "1:on", qos=1)
+client.publish("waveshare/relay/cmd", "1:on", qos=1)
 time.sleep(1)
 
 print(f"   Commande 3: 0:off")
-client.publish("home/esp32/relay/cmd", "0:off", qos=1)
+client.publish("waveshare/relay/cmd", "0:off", qos=1)
 time.sleep(2)
 
 # Attendre le statut final

@@ -55,7 +55,7 @@ for relay_num in range(8):
     
     # Allumer
     print(f"  📤 ON  ", end="", flush=True)
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:on", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:on", qos=1)
     
     # Attendre le statut
     time.sleep(3)
@@ -67,7 +67,7 @@ for relay_num in range(8):
     
     # Éteindre
     print(f"  📤 OFF ", end="", flush=True)
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:off", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:off", qos=1)
     
     # Attendre le statut
     time.sleep(3)

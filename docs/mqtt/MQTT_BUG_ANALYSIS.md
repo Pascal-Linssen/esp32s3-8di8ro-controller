@@ -95,9 +95,9 @@ PRE-LOOP: ethClient.connected=1, MQTT.connected=1
 
 **Messages envoyés pendant test:**
 ```
-📤 Envoi: home/esp32/relay/cmd = 0:on → ✓ Publié
-📤 Envoi: home/esp32/relay/cmd = 0:off → ✓ Publié
-📤 Envoi: home/esp32/relay/cmd = 1:on → ✓ Publié
+📤 Envoi: waveshare/relay/cmd = 0:on → ✓ Publié
+📤 Envoi: waveshare/relay/cmd = 0:off → ✓ Publié
+📤 Envoi: waveshare/relay/cmd = 1:on → ✓ Publié
 ...
 ```
 

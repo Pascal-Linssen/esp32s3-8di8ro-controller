@@ -78,7 +78,7 @@ for relay_num in range(8):
     
     # ON
     print(f"  📤 Envoi: {relay_num}:on")
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:on", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:on", qos=1)
     time.sleep(1.5)
     
     if relay_history:
@@ -87,7 +87,7 @@ for relay_num in range(8):
     
     # OFF
     print(f"  📤 Envoi: {relay_num}:off")
-    client.publish("home/esp32/relay/cmd", f"{relay_num}:off", qos=1)
+    client.publish("waveshare/relay/cmd", f"{relay_num}:off", qos=1)
     time.sleep(1.5)
     
     if relay_history:

@@ -47,7 +47,7 @@ try:
         ("2:toggle", "Toggle relai 2"),
     ]
     
-    topic = "home/esp32/relay/cmd"
+    topic = "waveshare/relay/cmd"
     
     for payload, desc in commands:
         print(f"\n[{datetime.now().strftime('%H:%M:%S')}] 📤 Envoi: {desc}")

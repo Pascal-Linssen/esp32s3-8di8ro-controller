@@ -86,7 +86,7 @@ python3 test_mqtt_fixed.py
 **Résultat attendu** :
 ```
 🎯 MQTT MESSAGE RECEIVED #1!     ← ENFIN! Ces messages apparaissent maintenant
-   Topic: home/esp32/relay/cmd
+   Topic: waveshare/relay/cmd
    Payload: 0:on
 ✓ Relay 0: ON
 ```
@@ -124,7 +124,7 @@ python3 test_mqtt_fixed.py
 
 ### ❌ Ce qui NE Change PAS
 - Hardware (ESP32-S3 + W5500 identiques)
-- Topics MQTT (home/esp32/relay/cmd etc.)
+- Topics MQTT (waveshare/relay/cmd etc.)
 - IP du broker
 - User/password MQTT
 - Configuration des relais
@@ -196,14 +196,14 @@ Console série doit afficher:
 Console série doit afficher:
 ```
 ✅ MQTT connected!
-✓ Subscribed to: home/esp32/relay/cmd
+✓ Subscribed to: waveshare/relay/cmd
 ```
 
 ### Test 5: Callbacks
 Exécuter `test_mqtt_fixed.py` puis vérifier:
 ```
 🎯 MQTT MESSAGE RECEIVED #1!     ← CE MESSAGE DOIT APPARAÎTRE
-   Topic: home/esp32/relay/cmd
+   Topic: waveshare/relay/cmd
    Payload: 0:on
 ✓ Relay 0: ON
 ```

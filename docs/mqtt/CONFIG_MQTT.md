@@ -35,7 +35,7 @@ config broker 192.168.1.200
 config port 1883
 config user nomutilisateur
 config password monmdp
-config topic-relay-cmd home/esp32/relay/cmd
+config topic-relay-cmd waveshare/relay/cmd
 ```
 
 #### 3️⃣ Via Interface Web (Disponible)
@@ -54,11 +54,11 @@ API:
   "broker_port": 1883,
   "username": "<mqtt_username>",
   "password": "<mqtt_password>",
-  "topic_relay_cmd": "home/esp32/relay/cmd",
-  "topic_relay_status": "home/esp32/relay/status",
-  "topic_input_status": "home/esp32/input/status",
-  "topic_sensor_status": "home/esp32/sensor/status",
-  "topic_system_status": "home/esp32/system/status"
+  "topic_relay_cmd": "waveshare/relay/cmd",
+  "topic_relay_status": "waveshare/relay/status",
+  "topic_input_status": "waveshare/input/status",
+  "topic_sensor_status": "waveshare/sensor/status",
+  "topic_system_status": "waveshare/system/status"
 }
 ```
 
@@ -121,11 +121,11 @@ python tools/mqtt/configure_mqtt.py
 👤 Utilisateur: pascal
 🔐 Mot de passe: ***
 📨 Topics:
-   Relais (CMD):    home/esp32/relay/cmd
-   Relais (STATUS): home/esp32/relay/status
-   Entrées:         home/esp32/input/status
-   Capteurs:        home/esp32/sensor/status
-   Système:         home/esp32/system/status
+  Relais (CMD):    waveshare/relay/cmd
+  Relais (STATUS): waveshare/relay/status
+  Entrées:         waveshare/input/status
+  Capteurs:        waveshare/sensor/status
+  Système:         waveshare/system/status
 
 Choisissez une option:
 1. Modifier adresse broker

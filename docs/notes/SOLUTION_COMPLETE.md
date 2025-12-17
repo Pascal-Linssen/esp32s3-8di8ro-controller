@@ -176,7 +176,7 @@ PC (MQTT Listener) reçoit: {"relay_0": 1}
 | `ALL:off` | Éteint TOUS les relais |
 | `ALL:toggle` | Bascule TOUS les relais |
 
-### Topic: `home/esp32/relay/cmd`
+### Topic: `waveshare/relay/cmd`
 ```bash
 # Exemple avec mosquitto_pub (via Python):
 python -c "
@@ -184,7 +184,7 @@ import paho.mqtt.client as mqtt
 client = mqtt.Client()
 client.username_pw_set('<mqtt_username>', '<mqtt_password>')
 client.connect('192.168.1.200', 1883)
-client.publish('home/esp32/relay/cmd', '0:on')
+client.publish('waveshare/relay/cmd', '0:on')
 client.disconnect()
 "
 ```
@@ -197,10 +197,10 @@ L'ESP32 publie régulièrement (tous les 5s) sur:
 
 | Topic | Contenu | Format |
 |-------|---------|--------|
-| `home/esp32/relay/status` | État des 8 relais | `{"relay_0": 0, "relay_1": 1, ...}` |
-| `home/esp32/input/status` | État des 8 entrées | `{"input_0": 0, ...}` |
-| `home/esp32/sensor/status` | Temp/Humidité | `{"temperature": 25.3, "humidity": 45.2}` |
-| `home/esp32/system/status` | Info système | `{"uptime_ms": 12345, "loop_count": 5000, "callback_count": 42, "mqtt_reconnects": 1}` |
+| `waveshare/relay/status` | État des 8 relais | `{"relay_0": 0, "relay_1": 1, ...}` |
+| `waveshare/input/status` | État des 8 entrées | `{"input_0": 0, ...}` |
+| `waveshare/sensor/status` | Temp/Humidité | `{"temperature": 25.3, "humidity": 45.2}` |
+| `waveshare/system/status` | Info système | `{"uptime_ms": 12345, "loop_count": 5000, "callback_count": 42, "mqtt_reconnects": 1}` |
 
 ---
 
@@ -234,11 +234,11 @@ client.connect('192.168.1.200', 1883)
 client.loop_start()
 
 # Allumer relai 0
-client.publish('home/esp32/relay/cmd', '0:on')
+client.publish('waveshare/relay/cmd', '0:on')
 time.sleep(1)
 
 # Éteindre relai 0
-client.publish('home/esp32/relay/cmd', '0:off')
+client.publish('waveshare/relay/cmd', '0:off')
 time.sleep(1)
 
 client.loop_stop()
@@ -260,7 +260,7 @@ Vous verrez:
 ✓ I2C initialized
 ✓ TCA9554 configured (all relays OFF at startup)
 ✓ MQTT client initialized with 256dpi/arduino-mqtt
-✓ Subscribed to: home/esp32/relay/cmd (result: 1)
+✓ Subscribed to: waveshare/relay/cmd (result: 1)
 
 [5000 ms] 📊 DEBUG INFO (loop #123, callback #5):
    Ethernet: ✅ Connected (IP: 192.168.1.50)
