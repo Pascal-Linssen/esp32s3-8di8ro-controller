@@ -10,10 +10,12 @@ import time
 import threading
 from datetime import datetime
 
-BROKER = "192.168.1.200"
-PORT = 1883
-USERNAME = "pascal"
-PASSWORD = "123456"
+import os
+
+BROKER = os.getenv("MQTT_HOST", "192.168.1.200")
+PORT = int(os.getenv("MQTT_PORT", "1883"))
+USERNAME = os.getenv("MQTT_USERNAME", "")
+PASSWORD = os.getenv("MQTT_PASSWORD", "")
 
 # État suivi
 relay_states = {}
@@ -59,7 +61,8 @@ client.on_message = on_message
 
 try:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Connexion à {BROKER}:{PORT}...")
-    client.username_pw_set(USERNAME, PASSWORD)
+    if USERNAME:
+        client.username_pw_set(USERNAME, PASSWORD)
     client.connect(BROKER, PORT, keepalive=60)
     client.loop_start()
     

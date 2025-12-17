@@ -73,7 +73,7 @@ test                - Cycle all relays for verification
 
 1. **[HIGH] HTTP Web Interface** - EthernetServer approach still blocked, needs research
 2. **[HIGH] DHT22 Verification** - Check physical connection
-3. **[MEDIUM] MQTT Integration** - Broker credentials known (192.168.1.200:1883, pascal/123456)
+3. **[MEDIUM] MQTT Integration** - Broker credentials known (192.168.1.200:1883, <mqtt_username>/<mqtt_password>)
 4. **[MEDIUM] Dashboard Display** - HTML page ready, needs HTTP server fix
 5. **[LOW] Modbus TCP / CAN Bus** - Future nice-to-have
 

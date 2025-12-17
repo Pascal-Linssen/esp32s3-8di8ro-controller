@@ -52,8 +52,8 @@ API:
 {
   "broker_ip": "192.168.1.200",
   "broker_port": 1883,
-  "username": "pascal",
-  "password": "123456",
+  "username": "<mqtt_username>",
+  "password": "<mqtt_password>",
   "topic_relay_cmd": "home/esp32/relay/cmd",
   "topic_relay_status": "home/esp32/relay/status",
   "topic_input_status": "home/esp32/input/status",

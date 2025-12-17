@@ -8,12 +8,13 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import sys
+import os
 
 # Configuration
-BROKER_HOST = "192.168.1.200"
-BROKER_PORT = 1883
-BROKER_USER = "pascal"
-BROKER_PASSWORD = "123456"
+BROKER_HOST = os.getenv("MQTT_HOST", "192.168.1.200")
+BROKER_PORT = int(os.getenv("MQTT_PORT", "1883"))
+BROKER_USER = os.getenv("MQTT_USERNAME", "")
+BROKER_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 CLIENT_ID = "test-script"
 
 # Topics
@@ -147,7 +148,8 @@ def main():
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=CLIENT_ID)
     except (AttributeError, TypeError):
         client = mqtt.Client(client_id=CLIENT_ID)
-    client.username_pw_set(BROKER_USER, BROKER_PASSWORD)
+    if BROKER_USER:
+        client.username_pw_set(BROKER_USER, BROKER_PASSWORD)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message

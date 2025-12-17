@@ -20,8 +20,8 @@
 ### Credentials (CORRIGÉS)
 ```
 Broker: 192.168.1.200:1883
-User: pascal
-Password: 123456 (NON: Europe3224.@)
+User: <mqtt_username>
+Password: <mqtt_password>
 Client ID: ESP32-S3-ETH
 ```
 
@@ -45,7 +45,7 @@ Les commandes MQTT ne sont **pas reçues** par la callback:
 - **Callback jamais appelée** (aucun debug serial)
 
 ### Investigation Faite
-1. ✅ Credentials corrigées (123456)
+1. ✅ Credentials corrigées (<mqtt_password>)
 2. ✅ SPIFFS effacé et réinitialisé
 3. ✅ Firmware compilé avec debug extensive
 4. ✅ Monitoring serial actif
@@ -150,7 +150,7 @@ Config/
 
 3. **Tester avec mosquitto** sur PC:
    ```bash
-   mosquitto_sub -h 192.168.1.200 -u pascal -P 123456 -t "home/esp32/relay/cmd" -v
+   mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
    # Puis envoyer: mosquitto_pub ... -m "0:on"
    ```
 

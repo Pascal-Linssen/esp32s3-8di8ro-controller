@@ -228,7 +228,7 @@ pio run
 Vérifier:
 1. Ethernet connected d'abord (LED W5500)
 2. IP du broker: mqtt_server = IPAddress(192, 168, 1, 200)
-3. User/password: pascal / 123456
+3. User/password: <mqtt_username> / <mqtt_password>
 ```
 
 ### ❌ Callbacks ne se déclenchent toujours pas

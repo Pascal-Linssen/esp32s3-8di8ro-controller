@@ -7,11 +7,12 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import sys
+import os
 
 BROKER_IP = "192.168.1.200"
 BROKER_PORT = 1883
-MQTT_USER = "pascal"
-MQTT_PASS = "123456"
+MQTT_USER = os.getenv("MQTT_USERNAME", "")
+MQTT_PASS = os.getenv("MQTT_PASSWORD", "")
 
 def on_message(client, userdata, msg):
     print(f"[MQTT] {msg.topic}: {msg.payload.decode()}")
@@ -22,7 +23,8 @@ def main():
     print("=" * 60)
     
     client = mqtt.Client()
-    client.username_pw_set(MQTT_USER, MQTT_PASS)
+    if MQTT_USER:
+        client.username_pw_set(MQTT_USER, MQTT_PASS)
     client.on_message = on_message
     
     print(f"\nConnecting to {BROKER_IP}:{BROKER_PORT}...")

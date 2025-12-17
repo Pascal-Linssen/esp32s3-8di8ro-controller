@@ -45,8 +45,9 @@ IPAddress dns1(8, 8, 8, 8);
 // Configuration MQTT (Mosquitto @ 192.168.1.200:1883)
 IPAddress mqttServer(192, 168, 1, 200);
 uint16_t mqttPort = 1883;
-char mqttUser[50] = "pascal";
-char mqttPassword[50] = "123456";
+// Ne pas stocker de credentials en dur dans le firmware (configurable via SPIFFS / interface Web).
+char mqttUser[50] = "";
+char mqttPassword[50] = "";
 const char* mqttClientID = "ESP32-S3-ETH";
 const char* CONFIG_FILE = "/config.json";
 
@@ -480,8 +481,15 @@ void mqttReconnect() {
   
   while (!mqttClient.connected() && attempts < maxAttempts) {
     Serial.print("Tentative MQTT... ");
-    
-    if (mqttClient.connect(mqttClientID, mqttUser, mqttPassword)) {
+
+    bool ok = false;
+    if (mqttUser[0] == '\0') {
+      ok = mqttClient.connect(mqttClientID);
+    } else {
+      ok = mqttClient.connect(mqttClientID, mqttUser, mqttPassword);
+    }
+
+    if (ok) {
       Serial.println("✓ Connecté");
       mqttConnected = true;
       

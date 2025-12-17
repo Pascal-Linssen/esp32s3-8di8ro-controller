@@ -6,16 +6,11 @@
 - **Adresse** : `192.168.1.200:1883` (Home Assistant)
 - **Client ID** : `ESP32S3_8DI8RO`
 - **Authentification** : 
-  - **Login** : `pascal`
-  - **Password** : `123456`
+  - **Login** : `<mqtt_username>`
+  - **Password** : `<mqtt_password>`
 
 ### Modification de la configuration
-Dans `main.cpp`, lignes 16-20 :
-```cpp
-IPAddress mqttServer(192, 168, 1, 200); // IP du broker
-#define MQTT_USER "pascal"               // Login MQTT
-#define MQTT_PASS "123456"               // Password MQTT
-```
+La configuration MQTT est persistée dans SPIFFS (`/config.json`) et peut être modifiée via l’interface Web ou via les scripts dans `tools/mqtt/`.
 
 ## Topics MQTT
 
@@ -156,14 +151,14 @@ sudo apt install mosquitto-clients
 ### Commandes de test
 ```bash
 # Écouter tous les topics (avec authentification)
-mosquitto_sub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/+"
+mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "esp32s3/+"
 
 # Contrôler relais 1 (avec authentification)
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "1:ON"
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "1:OFF"
+mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "esp32s3/relay/cmd" -m "1:ON"
+mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "esp32s3/relay/cmd" -m "1:OFF"
 
 # Éteindre tous les relais
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "ALL:OFF"
+mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "esp32s3/relay/cmd" -m "ALL:OFF"
 ```
 
 ## Dépannage

@@ -16,7 +16,7 @@
 ```
 ✅ Statuts publient correctement (MQTT Explorer les reçoit)
 ✅ Ethernet fonctionne (IP: 192.168.1.50)
-✅ Credentials correctes (pascal / 123456)
+✅ Credentials correctes (<mqtt_username> / <mqtt_password>)
 ✅ Client MQTT reste connecté (mqttClient.connected() = true)
 ❌ Callback JAMAIS appelée (aucun debug "📨 MQTT Reçu" dans logs)
 ❌ Relays ne changent pas d'état
@@ -65,10 +65,14 @@ if (millis() - last_subscribe > 30000) {  // Tous les 30s
 ### 4. **Tester avec mosquitto sur PC**
 ```bash
 # Terminal 1: Écouter les commandes reçues par broker
-mosquitto_sub -h 192.168.1.200 -u pascal -P 123456 -t "home/esp32/relay/cmd" -v
+ mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
 
 # Terminal 2: Envoyer une commande
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "home/esp32/relay/cmd" -m "0:on"
+ mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -m "0:on"
+
+# Remplace par tes valeurs (exemple):
+# mosquitto_sub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -v
+# mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> -t "home/esp32/relay/cmd" -m "0:on"
 ```
 → Si mosquitto_sub reçoit le message mais ESP32 non = problème subscribe  
 → Si mosquitto_sub ne reçoit rien = problème publish côté client test
@@ -148,7 +152,7 @@ mqttClient.setCallback(mqttCallback);  // C'EST CRUCIAL!
 ## 📞 Support Notes
 
 - **Broker**: 192.168.1.200:1883 (Mosquitto local)
-- **Credentials**: pascal / 123456
+- **Credentials**: <mqtt_username> / <mqtt_password>
 - **ESP32 Serial**: COM4 @ 9600 baud
 - **Monitor**: `platformio device monitor -p COM4 -b 9600`
 - **Upload**: `platformio run -e esp32s3 -t upload`

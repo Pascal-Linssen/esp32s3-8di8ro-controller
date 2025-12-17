@@ -4,12 +4,13 @@
 import paho.mqtt.client as mqtt
 import time
 import sys
+import os
 
 # Configuration MQTT (MÊME que broker)
 BROKER = "192.168.1.200"
 PORT = 1883
-USER = "pascal"
-PASSWORD = "123456"
+USER = os.getenv("MQTT_USERNAME", "")
+PASSWORD = os.getenv("MQTT_PASSWORD", "")
 TOPIC_CMD = "home/esp32/relay/cmd"
 
 def on_connect(client, userdata, flags, rc):
@@ -29,7 +30,8 @@ client.on_disconnect = on_disconnect
 
 # Connecter
 print(f"Connexion à {BROKER}:{PORT}...")
-client.username_pw_set(USER, PASSWORD)
+if USER:
+    client.username_pw_set(USER, PASSWORD)
 client.connect(BROKER, PORT, keepalive=60)
 client.loop_start()
 

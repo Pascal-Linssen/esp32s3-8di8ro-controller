@@ -5,11 +5,12 @@
 
 import paho.mqtt.client as mqtt
 from datetime import datetime
+import os
 
-BROKER = "192.168.1.200"
-PORT = 1883
-USERNAME = "pascal"
-PASSWORD = "123456"
+BROKER = os.getenv("MQTT_HOST", "192.168.1.200")
+PORT = int(os.getenv("MQTT_PORT", "1883"))
+USERNAME = os.getenv("MQTT_USERNAME", "")
+PASSWORD = os.getenv("MQTT_PASSWORD", "")
 
 count = 0
 
@@ -25,7 +26,8 @@ def on_message(client, userdata, msg):
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
-client.username_pw_set(USERNAME, PASSWORD)
+if USERNAME:
+    client.username_pw_set(USERNAME, PASSWORD)
 client.connect(BROKER, PORT, keepalive=60)
 
 print("\n" + "="*70)

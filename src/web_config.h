@@ -65,8 +65,8 @@ void loadMQTTConfig() {
     parseIpString(ip, mqttServer);
     
     mqttPort = doc["broker_port"] | 1883;
-    strlcpy(mqttUser, doc["username"] | "pascal", sizeof(mqttUser));
-    strlcpy(mqttPassword, doc["password"] | "123456", sizeof(mqttPassword));
+    strlcpy(mqttUser, doc["username"] | "", sizeof(mqttUser));
+    strlcpy(mqttPassword, doc["password"] | "", sizeof(mqttPassword));
     
     strlcpy(topicRelayCmd, doc["topic_relay_cmd"] | "home/esp32/relay/cmd", sizeof(topicRelayCmd));
     strlcpy(topicRelayStatus, doc["topic_relay_status"] | "home/esp32/relay/status", sizeof(topicRelayStatus));

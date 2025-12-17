@@ -23,7 +23,7 @@ Votre ESP32-S3-ETH-8DI-8RO est maintenant **100% fonctionnel** avec Ethernet sta
 ### 3️⃣ **Implémentation MQTT**
 - **Objectif** : Intégration Home Assistant
 - **Configuration** : Mosquitto 192.168.1.200:1883
-- **Authentification** : pascal/123456
+- **Authentification** : <mqtt_username>/<mqtt_password>
 - **Protocole** : Support JSON + format simple
 
 ### 4️⃣ **Corrections Critiques**
@@ -182,7 +182,7 @@ Capteur: DHT22 pin 1
 IP ESP32: 192.168.1.50 (statique)
 Gateway: 192.168.1.1
 Broker MQTT: 192.168.1.200:1883
-User/Pass: pascal/123456
+User/Pass: <mqtt_username>/<mqtt_password>
 ```
 
 ---

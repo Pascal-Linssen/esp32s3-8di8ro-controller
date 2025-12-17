@@ -8,12 +8,13 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import sys
+import os
 
 # Configuration
-BROKER_HOST = "192.168.1.200"
-BROKER_PORT = 1883
-MQTT_USER = "pascal"
-MQTT_PASSWORD = "123456"
+BROKER_HOST = os.getenv("MQTT_HOST", "192.168.1.200")
+BROKER_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USER = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 CLIENT_ID = "mqtt-tester"
 
 # Topics
@@ -216,7 +217,8 @@ def main():
     
     # Créer le client MQTT
     client = mqtt.Client(client_id=CLIENT_ID)
-    client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+    if MQTT_USER:
+        client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message

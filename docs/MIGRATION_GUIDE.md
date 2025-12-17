@@ -272,7 +272,7 @@ pio run
 3. **Attendre** que MQTT se connecte
 4. **Envoyer** un message MQTT :
    ```bash
-   mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 \
+   mosquitto_pub -h 192.168.1.200 -u <mqtt_username> -P <mqtt_password> \
      -t home/esp32/relay/cmd -m "0:on"
    ```
 5. **Vérifier** la console : vous devriez voir

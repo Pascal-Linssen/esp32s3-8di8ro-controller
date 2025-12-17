@@ -182,7 +182,7 @@ PC (MQTT Listener) reçoit: {"relay_0": 1}
 python -c "
 import paho.mqtt.client as mqtt
 client = mqtt.Client()
-client.username_pw_set('pascal', '123456')
+client.username_pw_set('<mqtt_username>', '<mqtt_password>')
 client.connect('192.168.1.200', 1883)
 client.publish('home/esp32/relay/cmd', '0:on')
 client.disconnect()
@@ -229,7 +229,7 @@ import paho.mqtt.client as mqtt
 import time
 
 client = mqtt.Client()
-client.username_pw_set('pascal', '123456')
+client.username_pw_set('<mqtt_username>', '<mqtt_password>')
 client.connect('192.168.1.200', 1883)
 client.loop_start()
 
