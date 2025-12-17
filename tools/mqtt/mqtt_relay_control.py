@@ -31,10 +31,23 @@ def on_message(client, userdata, msg):
     try:
         import json
         data = json.loads(msg.payload.decode())
-        status_str = " ".join([f"R{i}:{'ON' if data[f'relay_{i}'] else 'OFF'}" for i in range(8)])
-        print(f"📊 État relais: {status_str}")
-    except:
-        pass
+
+        # Firmware actuel: JSON array [0/1] index 0..7
+        if isinstance(data, list) and len(data) >= 8:
+            status_str = " ".join([f"R{i}:{'ON' if int(data[i]) == 1 else 'OFF'}" for i in range(8)])
+            print(f"📊 État relais: {status_str}")
+            return
+
+        # Tolérance: ancien format dict {relay_0:0/1,...}
+        if isinstance(data, dict):
+            status_str = " ".join(
+                [f"R{i}:{'ON' if int(data.get(f'relay_{i}', 0)) == 1 else 'OFF'}" for i in range(8)]
+            )
+            print(f"📊 État relais: {status_str}")
+            return
+
+    except Exception:
+        return
 
 def send_command(command):
     """Send relay command via MQTT"""

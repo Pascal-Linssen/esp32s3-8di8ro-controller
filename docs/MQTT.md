@@ -1,11 +1,13 @@
 # Documentation MQTT
 
+Cette documentation décrit les topics et formats utilisés par le firmware actuel.
+
 ## Configuration
 
 ### Broker MQTT
-- **Adresse** : `192.168.1.200:1883` (Home Assistant)
+- **Adresse** : `192.168.1.200:1883`
 - **Client ID** : `ESP32S3_8DI8RO`
-- **Authentification** : 
+- **Authentification** :
   - **Login** : `<mqtt_username>`
   - **Password** : `<mqtt_password>`
 
@@ -15,62 +17,61 @@ La configuration MQTT est persistée dans SPIFFS (`/config.json`) et peut être 
 ## Topics MQTT
 
 ### 📊 État du Système
-**Topic** : `esp32s3/status`
+**Topic** : `waveshare/system/status`
 **Type** : Publication automatique (toutes les 30s)
 **Format JSON** :
 ```json
 {
   "ip": "192.168.1.50",
-  "uptime": 3600,
-  "ethernet": "OK",
-  "i2c": "OK"
+  "mqtt": "connected",
+  "uptime": 3600
 }
 ```
 
 ### 🔌 Contrôle des Relais
-**Topic de commande** : `esp32s3/relay/cmd`
+**Topic de commande** : `waveshare/relay/cmd`
 **Type** : Souscription (écoute des commandes)
 **Format** : `RELAY:STATE`
 
+Remarque: les relais sont indexés de `0` à `7`.
+
 #### Exemples de commandes :
 ```
-1:ON          # Allumer relais 1
-1:OFF         # Éteindre relais 1
-5:ON          # Allumer relais 5
-ALL:OFF       # Éteindre tous les relais
-ALL:ON        # Allumer tous les relais
+0:on          # Allumer relais 0
+0:off         # Éteindre relais 0
+5:on          # Allumer relais 5
+ALL:off       # Éteindre tous les relais
+ALL:on        # Allumer tous les relais
 ```
 
-**Topic d'état** : `esp32s3/relay/state`
+**Topic d'état** : `waveshare/relay/status`
 **Type** : Publication automatique (à chaque changement)
-**Format JSON** :
+**Format JSON** (tableau, index 0..7) :
 ```json
-{
-  "relays": [0, 1, 0, 0, 1, 0, 0, 0]
-}
+[0, 1, 0, 0, 1, 0, 0, 0]
 ```
-*(1 = ON, 0 = OFF pour relais 1-8)*
+*(1 = ON, 0 = OFF)*
 
 ### 📥 État des Entrées
-**Topic** : `esp32s3/input/state`
+**Topic** : `waveshare/input/status`
 **Type** : Publication automatique (à chaque changement)
-**Format JSON** :
+**Format JSON** (tableau, index 0..7) :
 ```json
-{
-  "inputs": [1, 0, 1, 1, 0, 0, 1, 0]
-}
+[1, 0, 1, 1, 0, 0, 1, 0]
 ```
-*(1 = HIGH, 0 = LOW pour entrées 1-8)*
+
+Les entrées sont en **logique active-bas** (INPUT_PULLUP):
+- `1` = **ACTIVE** (niveau bas / 0V)
+- `0` = **INACTIVE** (niveau haut / 3.3V)
 
 ### 🌡️ Données des Capteurs
-**Topic** : `esp32s3/sensor`
+**Topic** : `waveshare/sensor/status`
 **Type** : Publication automatique (toutes les 30s)
 **Format JSON** :
 ```json
 {
   "temperature": 23.5,
-  "humidity": 45.2,
-  "timestamp": 3600
+  "humidity": 45.2
 }
 ```
 
@@ -82,29 +83,29 @@ ALL:ON        # Allumer tous les relais
 sensor:
   - platform: mqtt
     name: "ESP32 Temperature"
-    state_topic: "esp32s3/sensor"
+    state_topic: "waveshare/sensor/status"
     value_template: "{{ value_json.temperature }}"
     unit_of_measurement: "°C"
 
 switch:
   - platform: mqtt
-    name: "Relay 1"
-    command_topic: "esp32s3/relay/cmd"
-    state_topic: "esp32s3/relay/state"
-    payload_on: "1:ON"
-    payload_off: "1:OFF"
-    value_template: "{{ value_json.relays[0] }}"
+    name: "Relay 0"
+    command_topic: "waveshare/relay/cmd"
+    state_topic: "waveshare/relay/status"
+    payload_on: "0:on"
+    payload_off: "0:off"
+    value_template: "{{ value_json[0] }}"
 ```
 
 ### Node-RED
 **Contrôler un relais** :
 ```
-[inject] → [change: msg.payload = "1:ON"] → [mqtt out: esp32s3/relay/cmd]
+[inject] → [change: msg.payload = "0:on"] → [mqtt out: waveshare/relay/cmd]
 ```
 
 **Surveiller les entrées** :
 ```
-[mqtt in: esp32s3/input/state] → [json] → [function: parse inputs] → [debug]
+[mqtt in: waveshare/input/status] → [json] → [function: parse inputs] → [debug]
 ```
 
 ### Python Script
@@ -123,16 +124,16 @@ def on_message(client, userdata, msg):
 
 # Contrôler relais
 def set_relay(client, relay_num, state):
-    command = f"{relay_num}:{'ON' if state else 'OFF'}"
-    client.publish("esp32s3/relay/cmd", command)
+  command = f"{relay_num}:{'on' if state else 'off'}"
+  client.publish("waveshare/relay/cmd", command)
 
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
-client.connect("192.168.1.100", 1883, 60)
+client.connect("192.168.1.200", 1883, 60)
 
 # Allumer relais 1
-set_relay(client, 1, True)
+set_relay(client, 0, True)
 
 client.loop_forever()
 ```

@@ -8,7 +8,7 @@
 ### Fonctionnalités
 - 🏭 **Contrôle industriel en temps réel**
 - 📱 **Interface responsive** (mobile/tablette/desktop)
-- 🔄 **Actualisation automatique** toutes les 10 secondes
+- 🔄 **Actualisation automatique** toutes les ~1 seconde
 - 🎨 **Interface moderne** avec thème industriel
 
 ## Sections de l'Interface
@@ -30,8 +30,8 @@
 - **Affichage en temps réel** des 8 entrées
 - **Grille 4x2** pour visualisation optimale
 - **États visuels** :
-  - 🟢 **HIGH** : Entrée à l'état haut (3.3V)
-  - 🔴 **LOW** : Entrée à l'état bas (0V)
+  - **ACTIVE** : entrée activée (logique **active-bas**, niveau bas / 0V)
+  - **INACTIVE** : entrée inactive (niveau haut / 3.3V via pull-up)
 
 ### 🌡️ Capteurs
 - **Température** : Affichage en °C (DHT22)
