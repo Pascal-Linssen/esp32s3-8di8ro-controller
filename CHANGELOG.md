@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v1.6.1 - Security hardening (Dec 17, 2025)
+
+### 🔒 Security
+- Removed hardcoded MQTT credentials from firmware defaults (username/password empty by default)
+- MQTT authentication becomes optional: connects without auth when username is empty
+
+### 🧰 Tooling & docs
+- Updated Python MQTT tools to use environment variables (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`)
+- Updated documentation examples to use placeholders (`<mqtt_username>`, `<mqtt_password>`)
+
+---
+
+## v1.6.0 - MQTT + Web UI + SPIFFS config (Dec 2025)
+
+### 🌐 Web
+- Embedded HTTP dashboard over W5500 with chunked responses (fixes `ERR_CONTENT_LENGTH_MISMATCH`)
+- Relay control via `fetch()` (no navigation) and JS polling via `/api/status`
+
+### ⚙️ Configuration
+- Network + MQTT configuration via Web UI
+- Persistent config stored in SPIFFS (`/config.json`)
+
+---
+
 ## v1.5 - Session 3 (Dec 16, 2025, 10:45 AM)
 
 ### 🎯 BREAKTHROUGH: I2C TCA9554 Relay Control Fully Operational
