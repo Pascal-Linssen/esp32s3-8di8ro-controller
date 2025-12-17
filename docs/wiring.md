@@ -34,7 +34,7 @@ MOSI: Pin 13
 
 ### DHT22 Température/Humidité - **CONFIGURÉ**
 ```
-Data: Pin 12
+Data: Pin 21
 VCC:  3.3V
 GND:  GND
 ```
@@ -55,7 +55,7 @@ GND:  GND
 ```
 DHT22   ->  ESP32-S3
 VCC     ->  3.3V
-Data    ->  Pin 12
+Data    ->  Pin 21
 GND     ->  GND
 ```
 

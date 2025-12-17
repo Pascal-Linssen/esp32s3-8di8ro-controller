@@ -1,243 +1,79 @@
 # ESP32-S3-ETH-8DI-8RO Controller
 
-# ESP32-S3-ETH-8DI-8RO Controller
+Contrôleur industriel pour la carte Waveshare **ESP32‑S3‑ETH‑8DI‑8RO**.
 
-## 📋 Description
+- Ethernet **W5500** (IP statique configurable)
+- **8 relais** via **TCA9554 (I2C 0x20)**
+- **8 entrées digitales** (GPIO 4 à 11)
+- **MQTT** (publication + commandes relais)
+- Interface **Web** (dashboard + configuration) via Ethernet
+- Configuration persistée dans **SPIFFS** (`/config.json`)
+- Capteur **DHT22** optionnel (DATA sur **GPIO21**)
 
-**Contrôleur industriel** pour carte Waveshare ESP32-S3-ETH-8DI-8RO
-- **Ethernet W5500** - Connectivité réseau stable
-- **8 Relays + 8 Inputs** - TCA9554 I2C
-- **MQTT** - Publication des statuts
-- **Configuration SPIFFS** - Persistent settings
-- **Firmware v1.6** - En développement
+## Statut
 
-## ✨ Statut des Fonctionnalités
+- Matériel (Ethernet, relais, entrées) : OK
+- MQTT : OK
+- Web (dashboard + API `GET /api/status`) : OK
+- Configuration Web (réseau + MQTT) : OK
 
-| Fonctionnalité | v1.5 | v1.6 | Status |
-|---|---|---|---|
-| Hardware (Relays, Inputs, Ethernet) | ✅ | ✅ | **VALIDÉ** |
-| MQTT Publish (Statuts) | ❌ | ✅ | **FONCTIONNEL** |
-| MQTT Subscribe (Commands) | ❌ | 🟡 | **EN DEBUG** |
-| SPIFFS Config Persistence | ❌ | ✅ | **FONCTIONNEL** |
-| Serial CLI | ✅ | ✅ | **FONCTIONNEL** |
-| Web Interface HTTP | ⚠️ | ⚠️ | *Stub seulement* |
-| Home Assistant Discovery | ❌ | ❌ | *À faire* |
+## Build / Flash (PlatformIO)
 
-## 🚀 Configuration & Setup
+- Fichier de config : [platformio.ini](platformio.ini)
 
-### Installation
+Commandes usuelles :
 
 ```bash
-git clone https://github.com/Pascal-Linssen/esp32s3-8di8ro-controller.git
-cd esp32s3-8di8ro-controller
-python -m platformio run -e esp32s3 -t upload
+platformio run -t upload
+platformio device monitor --baud 9600
 ```
 
-### Configuration MQTT (v1.6)
+Note : adapte `monitor_port` dans [platformio.ini](platformio.ini) (ex: `COM8`).
 
-**Broker**: `192.168.1.200:1883`
-**Auth**: `pascal / 123456`
+## Interface Web
 
-#### Configuration Persistente
+- URL : `http://<ip_de_la_carte>/`
+- Rafraîchissement : via polling JavaScript (≈ 1s) sur `GET /api/status`
+- Contrôle relais : requêtes HTTP (sans quitter la page)
+- Configuration : réseau + MQTT (persistée SPIFFS)
 
-Option 1 - Python CLI:
-```bash
-python configure_mqtt.py
-```
+## MQTT
 
-Option 2 - Auto au démarrage:
-- SPIFFS charge `/config.json` automatiquement
-- Defaults en cas de fichier manquant
-
-### Topics MQTT
+Topics utilisés (référence projet) :
 
 ```
-home/esp32/relay/status     ← JSON: [0,0,1,0,0,0,0,0]
-home/esp32/input/status     ← Entrées digitales
-home/esp32/sensor/status    ← Temp/Humidité
-home/esp32/system/status    ← Infos système
+home/esp32/relay/status
+home/esp32/input/status
+home/esp32/sensor/status
+home/esp32/system/status
 
-home/esp32/relay/cmd        → Format: "0:on", "1:off", "ALL:on"  [⚠️ EN DEBUG]
+home/esp32/relay/cmd        (ex: "0:on", "0:off", "ALL:on")
 ```
 
-## 🔧 Commandes Série (9600 baud)
-relay X off       - Éteint relais X (0-7)
-test              - Cycle tous les relais pour test
-```
+## Câblage (pins)
 
-## 🌐 Interfaces Disponibles
+Le document de référence est : [docs/wiring.md](docs/wiring.md)
 
-### Interface Web
-- **URL** : http://192.168.1.50
-- **Contrôle visuel** des 8 relais
-- **Monitoring** des 8 entrées digitales
-- **Affichage** température/humidité
-- **Actualisation automatique** toutes les 10s
+Rappel :
 
-### MQTT
-- **Broker** : 192.168.1.200:1883 (pascal/123456)
-- **Topics** :
-  - `esp32s3/relay/cmd` - Commandes relais JSON/simple
-  - `esp32s3/relay/status` - États relais
-  - `esp32s3/sensor` - Température, humidité, entrées
-- **Formats supportés** :
-  - JSON : `{"relay": 1, "state": "on"}`
-  - Simple : `1:ON`
-  - `esp32s3/sensor` - Données capteurs
-  - `esp32s3/status` - État système
+- W5500 : CS=16, RST=39, SCK=15, MISO=14, MOSI=13
+- I2C (TCA9554) : SDA=42, SCL=41
+- Entrées : GPIO 4..11
+- DHT22 : DATA **GPIO21** (VCC 3.3V, GND)
 
-## 📌 Configuration Pins
+## Outils (scripts)
 
-### Ethernet W5500
-- CS: Pin 16
-- RST: Pin 39  
-- SCK: Pin 15
-- MISO: Pin 14
-- MOSI: Pin 13
+- MQTT : [tools/mqtt](tools/mqtt)
+  - Configuration : [tools/mqtt/configure_mqtt.py](tools/mqtt/configure_mqtt.py)
+- Web/diagnostic HTTP : [tools/web](tools/web)
+- Série : [tools/serial](tools/serial)
+- Tests scripts : [tools/tests](tools/tests)
 
-### TCA9554 I2C (Relais)
-- SDA: Pin 42 ⚡
-- SCL: Pin 41 ⚡
+## Structure du dépôt
 
-### Entrées Digitales
-- IN1-8: Pins 4-11
-
-### DHT22
-- Data: Pin 40
-
-## 🚀 Installation
-
-### Prérequis
-```bash
-# Bibliothèques PlatformIO
-- Wire @ 2.0.0
-- Ethernet @ 2.0.2
-- TCA9554 @ 0.1.2+sha.79c8c0b
-- DHT sensor library @ 1.4.6
-- Adafruit Unified Sensor @ 1.1.15
-- modbus-esp32 @ 4.1.0
-```
-
-### Configuration PlatformIO
-```ini
-[env:esp32s3]
-platform = espressif32
-board = esp32-s3-devkitc-1
-framework = arduino
-monitor_speed = 9600
-build_flags = 
-    -DARDUINO_USB_CDC_ON_BOOT=1
-```
-
-### Compilation et Upload
-```bash
-platformio run --target upload
-platformio device monitor --port COM8 --baud 9600
-```
-
-## 💡 Utilisation
-
-1. **Connexion série** : 9600 bauds
-2. **Test des relais** : `relay 1 on`, `relay 1 off`
-3. **État système** : `status`
-4. **Diagnostic I2C** : `scan`
-5. **Contrôle MQTT** : Topics `esp32s3/relay/cmd`
-
-### Contrôle MQTT
-```bash
-# Avec Mosquitto clients
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "1:ON"
-mosquitto_pub -h 192.168.1.200 -u pascal -P 123456 -t "esp32s3/relay/cmd" -m "ALL:OFF"
-```
-
-## 🔍 Diagnostic
-
-### Vérifier l'I2C
-```
-scan
-```
-Résultat attendu : TCA9554 détecté à l'adresse 0x20
-
-### Test des entrées/sorties
-```
-testio
-```
-
-### Informations sur les pins
-```
-pins
-```
-
-## 🎯 Résolution de Problèmes
-
-### TCA9554 non détecté
-- Vérifier les pins I2C : SDA=42, SCL=41
-- Scanner avec `testpins` pour tester d'autres combinaisons
-
-### Ethernet non fonctionnel
-- Vérifier la connexion du câble Ethernet
-- Pins W5500 configurés selon schéma Waveshare officiel
-
-## 📊 État du Projet (SESSION 3 UPDATES)
-
-| Composant | État | Notes |
-|-----------|------|-------|
-| TCA9554 Relais (8x) | ✅ OPÉRATIONNEL | Tous testés via série - I2C @ 0x20 |
-| Entrées Digitales (8x) | ✅ OPÉRATIONNEL | Toutes 8 lisent correctement |
-| Ethernet W5500 | ✅ CONNECTÉ | IP 192.168.1.50, stable |
-| Interface Série CLI | ✅ OPÉRATIONNEL | Commandes relay/test/help |
-| Capteur DHT22 | 🟡 CONFIG | Initialized, mais sensor non physiquement détecté |
-| Interface Web HTTP | 🟡 EN COURS | HTML/CSS prêts, besoin serveur HTTP |
-| API REST | ⏳ À FAIRE | Design prêt, implémentation après HTTP |
-| MQTT Integration | ⏳ À FAIRE | Broker credentials: 192.168.1.200:1883 |
-| Modbus TCP | ⏳ À FAIRE | Future enhancement |
-
-## 🧪 Résultats de Test (SESSION 3)
-
-**Test de Relais via CLI Sérielle:**
-```
->>> relay 0 on
-✓ Relais 1: ON (TCA9554 @ 0x20 bit 0)
->>> relay 0 off
-✓ Relais 1: OFF (TCA9554 @ 0x20 bit 0)
->>> test
-✓ All 8 relays cycled ON/OFF successfully
-```
-
-**Lecture des Entrées:**
-```
-Entrées: 1 1 1 1 1 0 1 1  ← Entrée 6 détectée LOW (physique confirmée)
-```
-
-**Métriques de Performance:**
-- RAM: 19.3KB / 320KB (5.9%)
-- Flash: 302KB / 3.3MB (8.8%)
-- Boot time: ~2s
-- Loop rate: 2s (polling)
-- Compilation: 9-20s
-
-## 🏗️ Architecture
-
-```
-ESP32-S3-ETH-8DI-8RO
-├── TCA9554 (I2C 0x20) → 8 Relais
-├── Entrées digitales → Pins 4-11  
-├── W5500 (SPI) → Ethernet
-├── Modbus TCP → Port 502 (Coils 0-7, Inputs 10000-10007)
-├── DHT22 → Pin 12
-└── Interface série → Diagnostic
-```
-
-## 🤝 Contribution
-
-Développé avec la découverte des pins officiels Waveshare via leur démo Arduino.
-
-## 📜 Licence
-
-Projet libre d'utilisation pour applications industrielles et éducatives.
-
----
-
-**Version**: 1.0 - TCA9554 Fonctionnel  
+- Firmware : [src](src)
+- Documentation : [docs](docs)
+- Outils : [tools](tools)
+- Archives/anciens essais : [archive](archive)
 **Carte**: Waveshare ESP32-S3-ETH-8DI-8RO  
 **Framework**: Arduino/PlatformIO

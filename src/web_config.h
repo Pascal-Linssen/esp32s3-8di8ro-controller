@@ -6,6 +6,11 @@
 #include <ArduinoJson.h>
 
 // Variables globales (déclarées dans main.cpp)
+extern IPAddress staticIP;
+extern IPAddress gateway;
+extern IPAddress subnet;
+extern IPAddress dns1;
+
 extern IPAddress mqttServer;
 extern uint16_t mqttPort;
 extern char mqttUser[50];
@@ -15,7 +20,6 @@ extern char topicRelayStatus[100];
 extern char topicInputStatus[100];
 extern char topicSensorStatus[100];
 extern char topicSystemStatus[100];
-extern PubSubClient mqttClient;
 extern const char* CONFIG_FILE;
 
 // ===== GESTION SPIFFS =====
@@ -28,6 +32,13 @@ void initSPIFFS() {
   Serial.println("✓ SPIFFS ready");
 }
 
+static bool parseIpString(const String &ip, IPAddress &out) {
+  uint32_t parts[4];
+  if (sscanf(ip.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) != 4) return false;
+  out = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+  return true;
+}
+
 void loadMQTTConfig() {
   if (!SPIFFS.exists(CONFIG_FILE)) {
     Serial.println("⚠️  Config file not found, using defaults");
@@ -38,10 +49,20 @@ void loadMQTTConfig() {
   DynamicJsonDocument doc(512);
   
   if (deserializeJson(doc, file) == DeserializationError::Ok) {
+    // Réseau (optionnel)
+    {
+      String ip = doc["static_ip"] | "";
+      if (ip.length()) parseIpString(ip, staticIP);
+      String gw = doc["gateway"] | "";
+      if (gw.length()) parseIpString(gw, gateway);
+      String mask = doc["subnet"] | "";
+      if (mask.length()) parseIpString(mask, subnet);
+      String dns = doc["dns1"] | "";
+      if (dns.length()) parseIpString(dns, dns1);
+    }
+
     String ip = doc["broker_ip"] | "192.168.1.200";
-    uint32_t ip_parts[4];
-    sscanf(ip.c_str(), "%lu.%lu.%lu.%lu", &ip_parts[0], &ip_parts[1], &ip_parts[2], &ip_parts[3]);
-    mqttServer = IPAddress(ip_parts[0], ip_parts[1], ip_parts[2], ip_parts[3]);
+    parseIpString(ip, mqttServer);
     
     mqttPort = doc["broker_port"] | 1883;
     strlcpy(mqttUser, doc["username"] | "pascal", sizeof(mqttUser));
@@ -62,11 +83,14 @@ void loadMQTTConfig() {
 void saveMQTTConfig() {
   DynamicJsonDocument doc(512);
   
-  char ip_str[20];
-  snprintf(ip_str, sizeof(ip_str), "%d.%d.%d.%d", 
-    mqttServer[0], mqttServer[1], mqttServer[2], mqttServer[3]);
+  // Réseau
+  doc["static_ip"] = staticIP.toString();
+  doc["gateway"] = gateway.toString();
+  doc["subnet"] = subnet.toString();
+  doc["dns1"] = dns1.toString();
   
-  doc["broker_ip"] = ip_str;
+  // MQTT
+  doc["broker_ip"] = mqttServer.toString();
   doc["broker_port"] = mqttPort;
   doc["username"] = mqttUser;
   doc["password"] = mqttPassword;

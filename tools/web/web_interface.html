@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏭 ESP32 8DI/8RO Controller - Interface Web</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #4ade80;
+            font-size: 2.5em;
+            text-shadow: 0 2px 10px rgba(74, 222, 128, 0.3);
+        }
+        .info-bar {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #888;
+            font-size: 0.9em;
+        }
+        .section {
+            background: rgba(56, 56, 56, 0.8);
+            border: 2px solid #4ade80;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+        }
+        .section h2 {
+            color: #4ade80;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            border-bottom: 2px solid #4ade80;
+            padding-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .status-item {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .status-item label {
+            display: block;
+            color: #aaa;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-item .value {
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+        .status-item.offline .value {
+            color: #ef4444;
+        }
+        .relay-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .relay-btn {
+            padding: 16px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+            background: #2d2d2d;
+            color: #ef4444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .relay-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+            border-color: #ef4444;
+        }
+        .relay-btn.on {
+            background: #4ade80;
+            color: #000;
+            border-color: #22c55e;
+            box-shadow: 0 0 15px rgba(74, 222, 128, 0.3);
+        }
+        .relay-btn.on:hover {
+            background: #22c55e;
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+        .relay-btn:active {
+            transform: translateY(-1px);
+        }
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+            gap: 12px;
+        }
+        .input-item {
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            background: #2d2d2d;
+            color: white;
+            border: 2px solid #ef4444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+        .input-item.high {
+            background: #4ade80;
+            border-color: #22c55e;
+            color: #000;
+            box-shadow: 0 0 15px rgba(74, 222, 128, 0.3);
+        }
+        .control-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .btn-control {
+            padding: 13px;
+            background: #3b82f6;
+            border: 2px solid #2563eb;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9em;
+        }
+        .btn-control:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+        .btn-control.on {
+            background: #4ade80;
+            border-color: #22c55e;
+            color: #000;
+        }
+        .btn-control.on:hover {
+            background: #22c55e;
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+        }
+        .btn-control.off {
+            background: #ef4444;
+            border-color: #dc2626;
+        }
+        .btn-control.off:hover {
+            background: #dc2626;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+            font-size: 0.85em;
+        }
+        .connection-info {
+            background: #2a3f2f;
+            border: 1px solid #4ade80;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #a8e6a1;
+        }
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .relay-grid, .input-grid { grid-template-columns: repeat(3, 1fr); }
+            .section { padding: 15px; }
+            .section h2 { font-size: 1.1em; }
+        }
+        @media (max-width: 480px) {
+            h1 { font-size: 1.3em; }
+            .relay-grid, .input-grid { grid-template-columns: repeat(2, 1fr); }
+            .status-grid { grid-template-columns: 1fr; }
+        }
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #4ade80;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏭 ESP32 8DI/8RO Controller</h1>
+        <div class="info-bar">
+            Interface de contrôle industriel en temps réel | 
+            <span id="update-status">🔄 Actualisation automatique</span>
+        </div>
+
+        <!-- SYSTEM STATUS -->
+        <div class="section">
+            <h2>📊 État du Système</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <label>Ethernet</label>
+                    <div class="value" id="eth-status">● CONNECTÉ</div>
+                </div>
+                <div class="status-item">
+                    <label>MQTT</label>
+                    <div class="value" id="mqtt-status">● CONNECTÉ</div>
+                </div>
+                <div class="status-item">
+                    <label>Adresse IP</label>
+                    <div class="value">192.168.1.50</div>
+                </div>
+                <div class="status-item">
+                    <label>Port HTTP</label>
+                    <div class="value">80</div>
+                </div>
+            </div>
+            <div class="connection-info">
+                ✓ W5500 Ethernet Shield activé
+                <br>✓ Broker MQTT: 192.168.1.200:1883
+                <br>✓ Callbacks MQTT: Fonctionnels (256dpi/MQTT v2.5.2)
+            </div>
+        </div>
+
+        <!-- RELAY CONTROL -->
+        <div class="section">
+            <h2>🔌 Contrôle des 8 Relais</h2>
+            <div class="relay-grid" id="relay-grid"></div>
+            <div class="control-section">
+                <button class="btn-control" onclick="toggleAll()">⚡ Basculer Tous</button>
+                <button class="btn-control on" onclick="allOn()">✓ Tous ON</button>
+                <button class="btn-control off" onclick="allOff()">✕ Tous OFF</button>
+            </div>
+        </div>
+
+        <!-- DIGITAL INPUTS -->
+        <div class="section">
+            <h2>📥 Entrées Digitales (8)</h2>
+            <div class="input-grid" id="input-grid"></div>
+            <p style="color: #888; margin-top: 15px; font-size: 0.9em;">
+                🟢 HIGH = 3.3V | 🔴 LOW = 0V
+            </p>
+        </div>
+
+        <!-- SENSORS -->
+        <div class="section">
+            <h2>🌡️ Capteurs (DHT22)</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <label>Température</label>
+                    <div class="value" id="temp">0.0°C</div>
+                </div>
+                <div class="status-item">
+                    <label>Humidité</label>
+                    <div class="value" id="humidity">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🔧 Système : ESP32-S3 | 🌐 Connexion Ethernet W5500 | 💬 MQTT 256dpi v2.5.2</p>
+            <p>📲 Interface web responsive | ⚙️ Actualisation en temps réel tous les 3 secondes</p>
+            <p style="margin-top: 20px; color: #4ade80;">
+                ✅ MQTT Callbacks FONCTIONNELS - Tous les relais répondent en temps réel
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:8000';
+        const UPDATE_INTERVAL = 3000; // 3 seconds
+
+        // Initialize UI
+        function initUI() {
+            const relayGrid = document.getElementById('relay-grid');
+            const inputGrid = document.getElementById('input-grid');
+            
+            for (let i = 0; i < 8; i++) {
+                // Relay buttons
+                const rbtn = document.createElement('button');
+                rbtn.className = 'relay-btn';
+                rbtn.id = `relay-${i}`;
+                rbtn.textContent = `R${i}`;
+                rbtn.onclick = () => toggleRelay(i);
+                relayGrid.appendChild(rbtn);
+                
+                // Input indicators
+                const iitem = document.createElement('div');
+                iitem.className = 'input-item';
+                iitem.id = `input-${i}`;
+                iitem.textContent = `E${i}`;
+                inputGrid.appendChild(iitem);
+            }
+            
+            updateStatus();
+            setInterval(updateStatus, UPDATE_INTERVAL);
+        }
+
+        // Toggle single relay via MQTT API
+        async function toggleRelay(index) {
+            console.log(`Toggling relay ${index}`);
+            const btn = document.getElementById(`relay-${index}`);
+            btn?.classList.add('loading');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/relay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ relay: index, action: 'toggle' })
+                });
+                
+                if (!response.ok) {
+                    console.error('API error:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Fetch error:', error.message);
+            } finally {
+                btn?.classList.remove('loading');
+            }
+        }
+
+        // Toggle all relays
+        async function toggleAll() {
+            console.log('Toggling all relays');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/relay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ relay: 'ALL', action: 'toggle' })
+                });
+                
+                if (!response.ok) {
+                    console.error('API error:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Fetch error:', error.message);
+            }
+        }
+
+        // All ON
+        async function allOn() {
+            console.log('All relays ON');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/relay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ relay: 'ALL', action: 'on' })
+                });
+                
+                if (!response.ok) {
+                    console.error('API error:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Fetch error:', error.message);
+            }
+        }
+
+        // All OFF
+        async function allOff() {
+            console.log('All relays OFF');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/relay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ relay: 'ALL', action: 'off' })
+                });
+                
+                if (!response.ok) {
+                    console.error('API error:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Fetch error:', error.message);
+            }
+        }
+
+        // Update status from API
+        async function updateStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/status`, { 
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateUIFromData(data);
+                    document.getElementById('update-status').textContent = 
+                        '✓ Connecté - Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+                } else {
+                    throw new Error(response.statusText);
+                }
+            } catch (error) {
+                // API not available
+                document.getElementById('update-status').innerHTML = 
+                    '⚠️ <strong>Attente du serveur...</strong>';
+                document.getElementById('mqtt-status').textContent = '● HORS LIGNE';
+            }
+        }
+
+        function updateUIFromData(data) {
+            // Update relay states
+            for (let i = 0; i < 8; i++) {
+                const btn = document.getElementById(`relay-${i}`);
+                btn.classList.toggle('on', data.r?.[i] || false);
+            }
+            
+            // Update input states
+            for (let i = 0; i < 8; i++) {
+                const item = document.getElementById(`input-${i}`);
+                item.classList.toggle('high', data.i?.[i] || false);
+            }
+            
+            // Update sensors
+            document.getElementById('temp').textContent = 
+                (data.t || 0).toFixed(1) + '°C';
+            document.getElementById('humidity').textContent = 
+                Math.round(data.h || 0) + '%';
+            
+            // Update MQTT status
+            const mqttStatus = document.getElementById('mqtt-status');
+            mqttStatus.textContent = (data.m ? '● CONNECTÉ' : '● DÉCONNECTÉ');
+            mqttStatus.parentElement.classList.toggle('offline', !data.m);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initUI);
+    </script>
+</body>
+</html>

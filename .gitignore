@@ -4,6 +4,15 @@
 .pioenvs/
 .piolibdeps/
 
+# Environnements Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Dossiers locaux
+backup/
+
 # Build artifacts
 *.bin
 *.elf

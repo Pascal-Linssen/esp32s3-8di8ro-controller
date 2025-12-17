@@ -8,6 +8,18 @@
 #include <SPIFFS.h>
 #include "web_config.h"
 
+// ESP32 Arduino core's Server interface requires begin(uint16_t).
+// The Arduino Ethernet library's EthernetServer implements begin() with no args.
+// Adapter to bridge the signature mismatch.
+class EthernetServerESP32 : public EthernetServer {
+public:
+  explicit EthernetServerESP32(uint16_t port) : EthernetServer(port) {}
+  void begin(uint16_t port = 0) override {
+    (void)port;
+    EthernetServer::begin();
+  }
+};
+
 // Configuration des pins - WAVESHARE OFFICIEL VALIDÉ
 #define ETH_SCK_PIN  15   // SPI Clock
 #define ETH_MISO_PIN 14   // SPI MISO
@@ -16,7 +28,7 @@
 #define ETH_RST_PIN  39   // W5500 Reset
 #define ETH_IRQ_PIN  12   // W5500 Interrupt
 
-#define DHT_PIN      40   // DHT22 Data
+#define DHT_PIN      21   // DHT22 Data (connecteur interne: GPIO21)
 #define DHT_TYPE     DHT22
 
 #define I2C_SDA_PIN  42   // TCA9554 SDA (I2C) - WAVESHARE OFFICIEL
@@ -59,8 +71,8 @@ bool inputStates[8] = {true};
 bool serverStarted = false;
 
 // Variables pour serveur HTTP simple
-EthernetClient clients[4];  // Max 4 clients simultanés
 uint16_t httpPort = 80;
+EthernetServerESP32 webServer(80);
 
 // MQTT Client
 EthernetClient ethClient;
@@ -75,6 +87,7 @@ void readInputs();
 void readSensors();
 String getHtmlPage();
 void handleHttpConnections();
+void handleHttpLoop();
 void setupWebServer();
 void setupMqtt();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
@@ -94,11 +107,13 @@ void setRelay(int relay, bool state) {
     Wire.requestFrom(TCA9554_ADDR, 1);
     byte output = Wire.read();
     
-    // Modifier le bit du relais (inversion: ON = LOW, OFF = HIGH)
+    // Modifier le bit du relais (logique active HIGH)
+    // state=true => bit HIGH (relais ON)
+    // state=false => bit LOW  (relais OFF)
     if (state) {
-      output &= ~(1 << relay); // SET bit LOW pour activé
+      output |= (1 << relay);
     } else {
-      output |= (1 << relay);  // SET bit HIGH pour désactivé
+      output &= ~(1 << relay);
     }
     
     // Écrire de retour au registre output
@@ -125,103 +140,236 @@ void readSensors() {
 }
 
 String getHtmlPage() {
+  String ipStr = Ethernet.localIP().toString();
+  String cfgStaticIpStr = staticIP.toString();
+  String cfgGatewayStr = gateway.toString();
+  String cfgSubnetStr = subnet.toString();
+  String cfgDnsStr = dns1.toString();
+
+  String mqttStr = mqttServer.toString();
+  String mqttState = mqttConnected ? "CONNECTE" : "DECONNECTE";
+
   String html = "<!DOCTYPE html><html><head>";
   html += "<meta charset='utf-8'>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<title>ESP32-8DI8RO Dashboard</title>";
   html += "<style>";
   html += "* {margin:0;padding:0;box-sizing:border-box;}";
-  html += "body {font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;color:#333;}";
-  html += "header {background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:20px;text-align:center;}";
+  html += "body {font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#0b0f0d;color:#e6f2ea;}";
+  html += "header {background:linear-gradient(135deg,#0f3d2e 0%,#072a1f 100%);color:#e6f2ea;padding:20px;text-align:center;}";
   html += ".container {max-width:1200px;margin:0 auto;padding:20px;}";
-  html += ".card {background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:20px;margin:15px 0;}";
+  html += ".card {background:#0f1a14;border-radius:6px;box-shadow:none;padding:20px;margin:15px 0;border:1px solid #1c5a41;}";
   html += ".grid2 {display:grid;grid-template-columns:1fr 1fr;gap:20px;}";
   html += ".grid4 {display:grid;grid-template-columns:repeat(4,1fr);gap:15px;}";
-  html += ".stat {text-align:center;padding:15px;background:#f9f9f9;border-radius:5px;}";
-  html += ".stat-value {font-size:24px;font-weight:bold;color:#667eea;}";
-  html += ".stat-label {font-size:12px;color:#999;margin-top:5px;}";
-  html += ".relay-item {padding:15px;border:2px solid #ddd;border-radius:5px;text-align:center;transition:all 0.3s;}";
-  html += ".relay-item:hover {border-color:#667eea;background:#f0f0ff;}";
-  html += ".relay-item.on {background:#c8e6c9;border-color:#4CAF50;}";
-  html += ".relay-item.off {background:#ffcccc;border-color:#f44336;}";
-  html += ".relay-num {font-size:14px;color:#999;margin-bottom:10px;}";
+  html += ".stat {text-align:center;padding:15px;background:#0b0f0d;border-radius:5px;border:1px solid #1c5a41;}";
+  html += ".stat-value {font-size:24px;font-weight:bold;color:#7ef7c8;}";
+  html += ".stat-label {font-size:12px;color:#b7d7c8;margin-top:5px;}";
+  html += ".relay-item {padding:15px;border:2px solid #1c5a41;border-radius:5px;text-align:center;transition:all 0.2s;}";
+  html += ".relay-item:hover {border-color:#2ea87f;background:#0b0f0d;}";
+  html += ".relay-item.on {background:#0c1f18;border-color:#2ea87f;}";
+  html += ".relay-item.off {background:#0e1311;border-color:#2b3a33;}";
+  html += ".relay-num {font-size:14px;color:#b7d7c8;margin-bottom:10px;}";
   html += ".relay-status {font-size:18px;font-weight:bold;margin:10px 0;}";
   html += ".relay-btn {padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;width:100%;transition:all 0.3s;}";
-  html += ".relay-btn.on {background:#4CAF50;color:white;}";
-  html += ".relay-btn.off {background:#f44336;color:white;}";
+  html += ".relay-btn.on {background:#2ea87f;color:#07130e;}";
+  html += ".relay-btn.off {background:#4b5563;color:#e5e7eb;}";
   html += ".relay-btn:hover {opacity:0.8;}";
   html += ".relay-btn:active {transform:scale(0.98);}";
-  html += ".input-item {padding:15px;border:2px solid #ddd;border-radius:5px;text-align:center;}";
-  html += ".input-item.high {background:#c8e6c9;border-color:#4CAF50;}";
-  html += ".input-item.low {background:#ffcccc;border-color:#f44336;}";
-  html += ".input-num {font-size:14px;color:#999;margin-bottom:10px;}";
+  html += ".input-item {padding:15px;border:2px solid #1c5a41;border-radius:5px;text-align:center;}";
+  // Entrées: style automatisme (HIGH=bleu, LOW=jaune)
+  html += ".input-item.high {background:#0a1324;border-color:#2563eb;}";
+  html += ".input-item.low {background:#1a1406;border-color:#d97706;}";
+  html += ".input-num {font-size:14px;color:#b7d7c8;margin-bottom:10px;}";
   html += ".input-status {font-size:16px;font-weight:bold;margin:10px 0;}";
-  html += "h2 {color:#333;margin:20px 0 15px 0;font-size:18px;border-bottom:2px solid #667eea;padding-bottom:10px;}";
-  html += ".status-bar {background:#fff;padding:10px;border-radius:5px;font-size:12px;color:#666;margin-top:20px;}";
-  html += "footer {text-align:center;color:#999;margin-top:40px;padding:20px;font-size:12px;}";
+  html += "h2 {color:#e6f2ea;margin:20px 0 15px 0;font-size:18px;border-bottom:2px solid #2ea87f;padding-bottom:10px;}";
+  html += ".status-bar {background:#0b0f0d;padding:10px;border-radius:5px;font-size:12px;color:#cfe9dc;margin-top:20px;border:1px solid #1c5a41;}";
+  html += ".cfg-row {display:grid;grid-template-columns:1fr 1fr;gap:12px;}";
+  html += ".cfg-field label {display:block;font-size:12px;color:#b7d7c8;margin-bottom:6px;}";
+  html += ".cfg-field input {width:100%;padding:10px;border-radius:6px;border:1px solid #1c5a41;background:#0b0f0d;color:#e6f2ea;}";
+  html += ".cfg-actions {margin-top:12px;display:flex;gap:10px;align-items:center;}";
+  html += ".cfg-msg {font-size:12px;color:#cfe9dc;}";
+  html += "footer {text-align:center;color:#b7d7c8;margin-top:40px;padding:20px;font-size:12px;}";
   html += "</style></head><body>";
-  html += "<header><h1>⚡ ESP32-S3-ETH-8DI8RO Dashboard</h1></header>";
+  html += "<header><h1>ESP32-S3-ETH-8DI8RO Dashboard</h1></header>";
   html += "<div class='container'>";
   
   // Section Capteurs
   html += "<div class='card'>";
-  html += "<h2>📊 Capteurs</h2>";
+  html += "<h2>Capteurs</h2>";
   html += "<div class='grid2'>";
-  html += "<div class='stat'><div class='stat-value'>";
+  html += "<div class='stat'><div class='stat-value' id='temp_val'>";
   html += String(temperature, 1);
-  html += "°C</div><div class='stat-label'>🌡️ Température</div></div>";
-  html += "<div class='stat'><div class='stat-value'>";
+  html += "°C</div><div class='stat-label'>Temperature</div></div>";
+  html += "<div class='stat'><div class='stat-value' id='hum_val'>";
   html += String(humidity, 1);
-  html += "%</div><div class='stat-label'>💧 Humidité</div></div>";
+  html += "%</div><div class='stat-label'>Humidite</div></div>";
+  html += "</div></div>";
+
+  // Section Système
+  html += "<div class='card'>";
+  html += "<h2>Systeme</h2>";
+  html += "<div class='grid2'>";
+  html += "<div class='stat'><div class='stat-value' id='sys_ip'>";
+  html += ipStr;
+  html += "</div><div class='stat-label'>IP Ethernet</div></div>";
+  html += "<div class='stat'><div class='stat-value' id='sys_mqtt'>";
+  html += mqttState;
+  html += "</div><div class='stat-label'>MQTT (";
+  html += mqttStr;
+  html += ":";
+  html += String(mqttPort);
+  html += ")</div></div>";
   html += "</div></div>";
   
   // Section Relais
   html += "<div class='card'>";
-  html += "<h2>⚡ Relais (8)</h2>";
+  html += "<h2>Relais (8)</h2>";
   html += "<div class='grid4'>";
   for (int i = 0; i < 8; i++) {
     bool isOn = relayStates[i];
-    html += "<div class='relay-item ";
+    html += "<div id='relay_";
+    html += String(i + 1);
+    html += "' class='relay-item ";
     html += (isOn ? "on" : "off");
     html += "'><div class='relay-num'>Relais ";
     html += String(i+1);
-    html += "</div><div class='relay-status'>";
+    html += "</div><div class='relay-status' id='relay_status_";
+    html += String(i + 1);
+    html += "'>";
     html += (isOn ? "ON" : "OFF");
     html += "</div>";
-    html += "<form method='POST' action='/api/relay/";
-    html += String(i);
-    html += (isOn ? "/off' style='display:inline;width:100%'>" : "/on' style='display:inline;width:100%'>");
-    html += "<button type='submit' class='relay-btn ";
+    html += "<button id='relay_btn_";
+    html += String(i + 1);
+    html += "' type='button' class='relay-btn ";
     html += (isOn ? "on" : "off");
-    html += "'>";
-    html += (isOn ? "Éteindre" : "Allumer");
-    html += "</button></form></div>";
+    html += "' onclick='toggleRelay(";
+    html += String(i + 1);
+    html += ")'>";
+    html += (isOn ? "Toggle (actuellement ON)" : "Toggle (actuellement OFF)");
+    html += "</button></div>";
   }
   html += "</div></div>";
+
+  html += "<div class='card'>";
+  html += "<button type='button' class='relay-btn on' onclick='toggleAllRelays()'>Basculer tous les relais</button>";
+  html += "</div>";
   
   // Section Entrées
   html += "<div class='card'>";
-  html += "<h2>📥 Entrées Digitales (8)</h2>";
+  html += "<h2>Entrees Digitales (8)</h2>";
   html += "<div class='grid4'>";
   for (int i = 0; i < 8; i++) {
     bool isHigh = inputStates[i];
-    html += "<div class='input-item ";
+    html += "<div id='input_";
+    html += String(i + 1);
+    html += "' class='input-item ";
     html += (isHigh ? "high" : "low");
     html += "'><div class='input-num'>Entrée ";
     html += String(i+1);
-    html += "</div><div class='input-status'>";
+    html += "</div><div class='input-status' id='input_status_";
+    html += String(i + 1);
+    html += "'>";
     html += (isHigh ? "HIGH" : "LOW");
     html += "</div></div>";
   }
   html += "</div></div>";
+
+  // Section Configuration
+  html += "<div class='card'>";
+  html += "<h2>Configuration (IP + MQTT)</h2>";
+  html += "<div class='cfg-row'>";
+  html += "<div class='cfg-field'><label>IP statique</label><input id='cfg_ip' placeholder='";
+  html += cfgStaticIpStr;
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Passerelle</label><input id='cfg_gw' placeholder='";
+  html += cfgGatewayStr;
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Masque</label><input id='cfg_mask' placeholder='";
+  html += cfgSubnetStr;
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>DNS</label><input id='cfg_dns' placeholder='";
+  html += cfgDnsStr;
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Broker MQTT (IP)</label><input id='cfg_mqtt_ip' placeholder='";
+  html += mqttStr;
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Port MQTT</label><input id='cfg_mqtt_port' placeholder='";
+  html += String(mqttPort);
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Utilisateur MQTT</label><input id='cfg_mqtt_user' placeholder='";
+  html += String(mqttUser);
+  html += "'></div>";
+  html += "<div class='cfg-field'><label>Mot de passe MQTT</label><input id='cfg_mqtt_pass' type='password' placeholder='(laisser vide pour ne pas changer)'></div>";
+  html += "</div>";
+  html += "<div class='cfg-actions'>";
+  html += "<button type='button' class='relay-btn on' onclick='saveConfig()'>Enregistrer</button>";
+  html += "<span class='cfg-msg' id='cfg_msg'></span>";
+  html += "</div>";
+  html += "</div>";
   
   html += "<div class='card status-bar'>";
-  html += "Système opérationnel | Ethernet W5500 | Rafraîchissement: 3s";
+  html += "Systeme operationnel | Ethernet W5500 | IP: <span id='sb_ip'>";
+  html += ipStr;
+  html += "</span> | MQTT: <span id='sb_mqtt'>";
+  html += mqttState;
+  html += "</span>";
   html += "</div>";
   
   html += "</div>";
-  html += "<script>setTimeout(function(){location.reload();},3000);</script>";
-  html += "<footer>API JSON: /api/status | Contrôle: /api/relay/X/on ou /api/relay/X/off</footer>";
+  html += "<script>";
+  html += "function callApi(path){return fetch(path,{cache:'no-store'}).then(function(r){return r.text();});}";
+  html += "function toggleRelay(n){callApi('/relay?num='+n+'&action=toggle').then(function(){setTimeout(pollStatus,120);});}";
+  html += "function toggleAllRelays(){callApi('/relay?action=all_toggle').then(function(){setTimeout(pollStatus,180);});}";
+  html += "function getVal(id){var el=document.getElementById(id); if(!el) return ''; return (el.value||'').trim(); }";
+  html += "function setMsg(t){var el=document.getElementById('cfg_msg'); if(el) el.textContent=t; }";
+
+  html += "function setClass(el, onClass, offClass, isOn){ if(!el) return; el.classList.remove(onClass); el.classList.remove(offClass); el.classList.add(isOn?onClass:offClass); }";
+  html += "function pollStatus(){fetch('/api/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(s){";
+  html += "var tv=document.getElementById('temp_val'); if(tv) tv.textContent=(Number(s.t)||0).toFixed(1)+'°C';";
+  html += "var hv=document.getElementById('hum_val'); if(hv) hv.textContent=(Number(s.h)||0).toFixed(1)+'%';";
+  html += "var sm=document.getElementById('sys_mqtt'); if(sm) sm.textContent=(s.mqtt? 'CONNECTE':'DECONNECTE');";
+  html += "var sbm=document.getElementById('sb_mqtt'); if(sbm) sbm.textContent=(s.mqtt? 'CONNECTE':'DECONNECTE');";
+  html += "if(Array.isArray(s.r)){";
+  html += "for(var i=0;i<Math.min(8,s.r.length);i++){var n=i+1; var isOn=!!s.r[i];";
+  html += "var box=document.getElementById('relay_'+n); setClass(box,'on','off',isOn);";
+  html += "var st=document.getElementById('relay_status_'+n); if(st) st.textContent=isOn?'ON':'OFF';";
+  html += "var btn=document.getElementById('relay_btn_'+n); if(btn){ setClass(btn,'on','off',isOn); btn.textContent=isOn?'Toggle (actuellement ON)':'Toggle (actuellement OFF)'; }";
+  html += "}}";
+  html += "if(Array.isArray(s.i)){";
+  html += "for(var j=0;j<Math.min(8,s.i.length);j++){var n2=j+1; var isHigh=!!s.i[j];";
+  html += "var ib=document.getElementById('input_'+n2); setClass(ib,'high','low',isHigh);";
+  html += "var ist=document.getElementById('input_status_'+n2); if(ist) ist.textContent=isHigh?'HIGH':'LOW';";
+  html += "}}";
+  html += "}).catch(function(){});}";
+  html += "function loadConfig(){fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){";
+  html += "var ip=document.getElementById('cfg_ip'); if(ip) ip.placeholder=c.static_ip||ip.placeholder;";
+  html += "var gw=document.getElementById('cfg_gw'); if(gw) gw.placeholder=c.gateway||gw.placeholder;";
+  html += "var mk=document.getElementById('cfg_mask'); if(mk) mk.placeholder=c.subnet||mk.placeholder;";
+  html += "var dn=document.getElementById('cfg_dns'); if(dn) dn.placeholder=c.dns1||dn.placeholder;";
+  html += "var mi=document.getElementById('cfg_mqtt_ip'); if(mi) mi.placeholder=c.broker_ip||mi.placeholder;";
+  html += "var mp=document.getElementById('cfg_mqtt_port'); if(mp) mp.placeholder=String(c.broker_port||mp.placeholder);";
+  html += "var mu=document.getElementById('cfg_mqtt_user'); if(mu) mu.placeholder=c.username||mu.placeholder;";
+  html += "}).catch(function(){});}";
+  html += "function saveConfig(){";
+  html += "setMsg('Enregistrement...');";
+  html += "var payload={};";
+  html += "var ip=getVal('cfg_ip'); if(ip) payload.static_ip=ip;";
+  html += "var gw=getVal('cfg_gw'); if(gw) payload.gateway=gw;";
+  html += "var mk=getVal('cfg_mask'); if(mk) payload.subnet=mk;";
+  html += "var dn=getVal('cfg_dns'); if(dn) payload.dns1=dn;";
+  html += "var b=getVal('cfg_mqtt_ip'); if(b) payload.broker_ip=b;";
+  html += "var p=getVal('cfg_mqtt_port'); if(p) payload.broker_port=parseInt(p,10);";
+  html += "var u=getVal('cfg_mqtt_user'); if(u) payload.username=u;";
+  html += "var pw=getVal('cfg_mqtt_pass'); if(pw) payload.password=pw;";
+  html += "fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(res){";
+  html += "if(res && res.restart){setMsg('OK. Redemarrage...'); setTimeout(function(){ if(res.new_ip){location.href='http://'+res.new_ip+'/';} else {location.reload();}},1500);}";
+  html += "else {setMsg('OK. MQTT mis a jour.'); setTimeout(function(){location.reload();},500);}";
+  html += "}).catch(function(){setMsg('Erreur sauvegarde');});";
+  html += "}";
+  html += "loadConfig();";
+  html += "pollStatus(); setInterval(pollStatus,1000);";
+  html += "</script>";
+  html += "<footer>API JSON: /api/status | Config: /api/config | Controle: /relay?num=N&action=toggle</footer>";
   html += "</body></html>";
   
   return html;
@@ -369,16 +517,260 @@ void setupMqtt() {
   mqttReconnect();
 }
 
-// Gestionnaire simple de connexions HTTP (stub pour maintenant)
-// Serveur HTTP simple avec Ethernet
-void handleHttpConnections() {
-  // Implémentation minimale - sera améliorée après validation de stabilité
-  // Note: EthernetServer.available() sur ESP32 nécessite une configuration lwip spéciale
+static void sendHttp(EthernetClient &client, const char *status, const char *contentType, const String &body) {
+  client.print("HTTP/1.1 ");
+  client.println(status);
+  client.println("Connection: close");
+  client.print("Content-Type: ");
+  client.println(contentType);
+  client.print("Content-Length: ");
+  client.println(body.length());
+  client.println();
+
+  const char *ptr = body.c_str();
+  size_t remaining = body.length();
+  while (remaining > 0 && client.connected()) {
+    size_t chunk = remaining;
+    if (chunk > 1024) chunk = 1024;
+    size_t written = client.write((const uint8_t *)ptr, chunk);
+    if (written == 0) {
+      delay(1);
+      continue;
+    }
+    ptr += written;
+    remaining -= written;
+  }
+  client.flush();
+}
+
+static String getQueryParam(const String &query, const char *key) {
+  // query without leading '?'
+  String k = String(key) + "=";
+  int start = query.indexOf(k);
+  if (start < 0) return "";
+  start += k.length();
+  int end = query.indexOf('&', start);
+  if (end < 0) end = query.length();
+  return query.substring(start, end);
+}
+
+static void handleRelayQuery(const String &query) {
+  // Supported:
+  //  /relay?num=1&action=toggle
+  //  /relay?action=all_toggle
+  String action = getQueryParam(query, "action");
+  String numStr = getQueryParam(query, "num");
+
+  if (action == "all_toggle") {
+    for (int i = 0; i < 8; i++) setRelay(i, !relayStates[i]);
+    return;
+  }
+
+  int relayNum = numStr.toInt();
+  if (relayNum < 1 || relayNum > 8) return;
+  int relayIndex = relayNum - 1;
+
+  if (action == "toggle") {
+    setRelay(relayIndex, !relayStates[relayIndex]);
+  } else if (action == "on") {
+    setRelay(relayIndex, true);
+  } else if (action == "off") {
+    setRelay(relayIndex, false);
+  }
 }
 
 void setupWebServer() {
-  // Serveur HTTP basique - à implémenter après validation v1.5
-  Serial.println("✓ HTTP server ready (à implémenter)");
+  webServer.begin(httpPort);
+  Serial.println("✓ HTTP server started (W5500) port 80");
+}
+
+void handleHttpLoop() {
+  EthernetClient client = webServer.available();
+  if (!client) return;
+
+  client.setTimeout(200);
+
+  // Read request line (e.g. "GET /path?x=y HTTP/1.1")
+  String requestLine = client.readStringUntil('\n');
+  requestLine.trim();
+
+  size_t contentLength = 0;
+  // Read headers
+  while (client.connected()) {
+    String line = client.readStringUntil('\n');
+    line.trim();
+    if (line.length() == 0) break;
+    if (line.startsWith("Content-Length:")) {
+      contentLength = (size_t)line.substring(String("Content-Length:").length()).toInt();
+    }
+  }
+
+  // Parse path
+  String method;
+  String target;
+  int sp1 = requestLine.indexOf(' ');
+  int sp2 = requestLine.indexOf(' ', sp1 + 1);
+  if (sp1 > 0 && sp2 > sp1) {
+    method = requestLine.substring(0, sp1);
+    target = requestLine.substring(sp1 + 1, sp2);
+  }
+
+  String path = target;
+  String query = "";
+  int q = target.indexOf('?');
+  if (q >= 0) {
+    path = target.substring(0, q);
+    query = target.substring(q + 1);
+  }
+
+  String body = "";
+  if (method == "POST" && contentLength > 0) {
+    body.reserve(contentLength + 1);
+    uint32_t start = millis();
+    while (body.length() < contentLength && client.connected()) {
+      if (client.available()) {
+        body += (char)client.read();
+        start = millis();
+      } else {
+        if (millis() - start > 500) break;
+        delay(1);
+      }
+    }
+  }
+
+  // Routing
+  if (method == "GET" && path == "/api/status") {
+    DynamicJsonDocument doc(768);
+    JsonArray r = doc.createNestedArray("r");
+    JsonArray i = doc.createNestedArray("i");
+    for (int k = 0; k < 8; k++) {
+      r.add(relayStates[k] ? 1 : 0);
+      i.add(inputStates[k] ? 1 : 0);
+    }
+    doc["t"] = temperature;
+    doc["h"] = humidity;
+    doc["mqtt"] = mqttConnected ? 1 : 0;
+    doc["uptime_ms"] = millis();
+
+    String body;
+    serializeJson(doc, body);
+    sendHttp(client, "200 OK", "application/json", body);
+  } else if (method == "GET" && path == "/api/config") {
+    DynamicJsonDocument doc(512);
+    doc["static_ip"] = staticIP.toString();
+    doc["gateway"] = gateway.toString();
+    doc["subnet"] = subnet.toString();
+    doc["dns1"] = dns1.toString();
+    doc["broker_ip"] = mqttServer.toString();
+    doc["broker_port"] = mqttPort;
+    doc["username"] = mqttUser;
+    doc["mqtt_connected"] = mqttConnected ? 1 : 0;
+    String out;
+    serializeJson(doc, out);
+    sendHttp(client, "200 OK", "application/json", out);
+  } else if (method == "POST" && path == "/api/config") {
+    DynamicJsonDocument doc(512);
+    DynamicJsonDocument resp(256);
+
+    IPAddress oldIp = staticIP;
+    IPAddress oldMqtt = mqttServer;
+    uint16_t oldPort = mqttPort;
+
+    DeserializationError err = deserializeJson(doc, body);
+    if (err) {
+      resp["ok"] = 0;
+      resp["error"] = "bad_json";
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "400 Bad Request", "application/json", out);
+    } else {
+      if (doc.containsKey("static_ip")) {
+        String ipStr = doc["static_ip"].as<String>();
+        IPAddress parsed;
+        uint32_t parts[4];
+        if (sscanf(ipStr.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) == 4) {
+          parsed = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+          staticIP = parsed;
+        }
+      }
+      if (doc.containsKey("gateway")) {
+        String ipStr = doc["gateway"].as<String>();
+        uint32_t parts[4];
+        if (sscanf(ipStr.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) == 4) {
+          gateway = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+        }
+      }
+      if (doc.containsKey("subnet")) {
+        String ipStr = doc["subnet"].as<String>();
+        uint32_t parts[4];
+        if (sscanf(ipStr.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) == 4) {
+          subnet = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+        }
+      }
+      if (doc.containsKey("dns1")) {
+        String ipStr = doc["dns1"].as<String>();
+        uint32_t parts[4];
+        if (sscanf(ipStr.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) == 4) {
+          dns1 = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+        }
+      }
+      if (doc.containsKey("broker_ip")) {
+        String ipStr = doc["broker_ip"].as<String>();
+        uint32_t parts[4];
+        if (sscanf(ipStr.c_str(), "%lu.%lu.%lu.%lu", &parts[0], &parts[1], &parts[2], &parts[3]) == 4) {
+          mqttServer = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+        }
+      }
+      if (doc.containsKey("broker_port")) {
+        mqttPort = (uint16_t)doc["broker_port"].as<int>();
+      }
+      if (doc.containsKey("username")) {
+        strlcpy(mqttUser, doc["username"].as<const char*>(), sizeof(mqttUser));
+      }
+      if (doc.containsKey("password")) {
+        const char *pw = doc["password"].as<const char*>();
+        if (pw && strlen(pw) > 0) {
+          strlcpy(mqttPassword, pw, sizeof(mqttPassword));
+        }
+      }
+
+      saveMQTTConfig();
+
+      bool needRestart = (oldIp != staticIP);
+      resp["ok"] = 1;
+      resp["restart"] = needRestart ? 1 : 0;
+      if (needRestart) resp["new_ip"] = staticIP.toString();
+
+      String out;
+      serializeJson(resp, out);
+      sendHttp(client, "200 OK", "application/json", out);
+
+      if (!needRestart) {
+        if (oldMqtt != mqttServer || oldPort != mqttPort) {
+          mqttClient.setServer(mqttServer, mqttPort);
+        }
+        mqttClient.disconnect();
+        mqttReconnect();
+      }
+
+      if (needRestart) {
+        delay(250);
+        ESP.restart();
+      }
+    }
+  } else if (method == "GET" && path == "/relay") {
+    handleRelayQuery(query);
+    sendHttp(client, "200 OK", "text/plain", "OK");
+  } else if (method == "GET" && path == "/") {
+    // Render snapshot HTML (auto-refresh like in docs)
+    String page = getHtmlPage();
+    sendHttp(client, "200 OK", "text/html; charset=utf-8", page);
+  } else {
+    sendHttp(client, "404 Not Found", "text/plain", "Not Found");
+  }
+
+  delay(5);
+  client.stop();
 }
 
 
@@ -388,6 +780,10 @@ void setup() {
   
   Serial.write(0x00); Serial.write(0xFF);  // Flush
   delay(500);
+
+  // Initialisation SPIFFS et chargement config AVANT Ethernet.begin (pour appliquer l'IP)
+  initSPIFFS();
+  loadMQTTConfig();
   Serial.println("\n\n╔════════════════════════════════════════╗");
   Serial.println("║ === DÉMARRAGE ESP32-S3-ETH-8DI-8RO ═══ ║");
   Serial.println("╚════════════════════════════════════════╝");
@@ -399,33 +795,30 @@ void setup() {
   Serial.println("✓ I2C initialisé (SDA=42, SCL=41)");
   
   // Configuration TCA9554 @ 0x20
-  delay(100); // Laisser TCA9554 initialiser
-  
-  // Configuration des pins: 0x03 = register config (polarity inversion)
+  // Registres TCA9554: 0x00 Input, 0x01 Output, 0x02 Polarity, 0x03 Configuration
+  // Relais: logique active HIGH (bit HIGH = relais ON)
+  delay(100);
+
+  // Polarity: pas d'inversion
   Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x03); // Polarity inversion register
-  Wire.write(0x00); // Pas d'inversion
+  Wire.write(0x02);
+  Wire.write(0x00);
   Wire.endTransmission();
-  
-  // 0x07 = Output register - initialiser tous les relais à OFF (HIGH logique inversée)
+
+  // Configuration: tous en OUTPUT
   Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x07); // Output register
-  Wire.write(0xFF); // Tous les outputs à 1 (relais OFF)
+  Wire.write(0x03);
+  Wire.write(0x00);
   Wire.endTransmission();
-  
-  // 0x06 = IO configuration register (0=output, 1=input)
+
+  // Outputs: tous LOW => relais OFF
   Wire.beginTransmission(TCA9554_ADDR);
-  Wire.write(0x06); // Config register
-  Wire.write(0x00); // Tous les pins en OUTPUT mode (relais)
+  Wire.write(0x01);
+  Wire.write(0x00);
   Wire.endTransmission();
-  
-  Serial.println("✓ TCA9554 configuré (8 relais OUTPUT)");
-  
-  Wire.beginTransmission(0x20);
-  Wire.write(0x01); // Output register
-  Wire.write(0x00); // Tous les relais OFF au démarrage
-  Wire.endTransmission();
-  Serial.println("✓ TCA9554 (I2C @ 0x20) configuré");
+
+  for (int i = 0; i < 8; i++) relayStates[i] = false;
+  Serial.println("✓ TCA9554 configuré (8 relais OFF au démarrage)");
   
   // Initialisation DHT22
   dht.begin();
@@ -483,9 +876,8 @@ void setup() {
   Serial.print("  Accès: http://");
   Serial.println(Ethernet.localIP());
   
-  // Initialisation SPIFFS et chargement config MQTT
-  initSPIFFS();
-  loadMQTTConfig();
+  // Configuration HTTP Web Server
+  setupWebServer();
   
   // Configuration MQTT
   setupMqtt();
@@ -493,15 +885,15 @@ void setup() {
   Serial.println("\n=== Système prêt ===\n");
   Serial.println("Accès interface web: http://");
   Serial.print(Ethernet.localIP());
-  Serial.println("/config");
+  Serial.println("/");
 }
 
 void loop() {
   // Maintenir la connexion Ethernet
   Ethernet.maintain();
   
-  // Gestion HTTP
-  handleWebServer(clients[0]);
+  // Gestion HTTP Web Server
+  handleHttpLoop();
   
   // Gestion MQTT
   if (!mqttClient.connected()) {

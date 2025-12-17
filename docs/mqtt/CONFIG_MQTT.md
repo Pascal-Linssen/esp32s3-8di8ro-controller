@@ -17,7 +17,7 @@ Trois méthodes:
 #### 1️⃣ Via CLI Python (Recommandé)
 
 ```bash
-python configure_mqtt.py
+python tools/mqtt/configure_mqtt.py
 ```
 
 Menu interactif pour:
@@ -38,9 +38,13 @@ config password monmdp
 config topic-relay-cmd home/esp32/relay/cmd
 ```
 
-#### 3️⃣ Via Interface Web (À implémenter)
+#### 3️⃣ Via Interface Web (Disponible)
 
-Accès futur sur: `http://192.168.1.50/config`
+Accès sur: `http://<ip_de_la_carte>/` (section configuration)
+
+API:
+- `GET /api/config`
+- `POST /api/config`
 
 ## Configuration par défaut
 
@@ -87,29 +91,14 @@ Accès futur sur: `http://192.168.1.50/config`
 └─────────────────────────────────────┘
 ```
 
-## Prochaines étapes
+## Prochaines étapes (optionnel)
 
-### 🟡 Phase 1: CLI sérielle (En cours)
-- [ ] Commandes config sur port série
-- [ ] Show/edit/save pour tous les paramètres
-- [ ] Validation des paramètres
-
-### 🟡 Phase 2: Upload de configuration (À faire)
-- [ ] Interface web pour upload JSON
-- [ ] HTTP POST `/api/config`
-- [ ] Validation et sauvegarde SPIFFS
-
-### 🟡 Phase 3: Dashboard web (À faire)  
-- [ ] Page HTML complète avec formulaire
-- [ ] GET `/api/config` pour charger état
-- [ ] POST `/api/config` pour modifier
-- [ ] POST `/api/reconnect` pour reconnecter MQTT
+- CLI sérielle pour éditer la config sans PC
+- `/api/reconnect` dédié (si tu veux reconnecter MQTT sans redémarrage)
 
 ## Limitations actuelles
 
-- ⚠️ Interface web HTTP non opérationnelle (EthernetServer incompatible)
-- ⚠️ Pas de CLI sérielle pour config (en cours)
-- ⚠️ Modification requiert PC avec Python pour l'instant
+- La méthode CLI Python reste utile pour automatiser des déploiements, mais n’est plus obligatoire
 
 ## Comment aider au développement?
 
@@ -121,7 +110,7 @@ Le système SPIFFS est prêt. Prochaine étape: **Implémenter serveur HTTP simp
 ## Exemple: Modifier broker via Python
 
 ```bash
-python configure_mqtt.py
+python tools/mqtt/configure_mqtt.py
 ```
 
 ```
