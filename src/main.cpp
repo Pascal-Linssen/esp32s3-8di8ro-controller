@@ -88,6 +88,8 @@ PubSubClient mqttClient(ethClient);
 bool mqttConnected = false;
 unsigned long lastMqttPublish = 0;
 const unsigned long mqttPublishInterval = 5000;  // Publier chaque 5s
+unsigned long lastMqttReconnectAttempt = 0;
+const unsigned long mqttReconnectIntervalMs = 3000;
 
 // ===== FONCTIONS FORWARD =====
 void setRelay(int relay, bool state);
@@ -483,39 +485,37 @@ void mqttPublishStatus() {
 }
 
 void mqttReconnect() {
-  // Reconnecter au broker MQTT
-  int attempts = 0;
-  const int maxAttempts = 3;
-  
-  while (!mqttClient.connected() && attempts < maxAttempts) {
-    Serial.print("Tentative MQTT... ");
-
-    bool ok = false;
-    if (mqttUser[0] == '\0') {
-      ok = mqttClient.connect(mqttClientID);
-    } else {
-      ok = mqttClient.connect(mqttClientID, mqttUser, mqttPassword);
-    }
-
-    if (ok) {
-      Serial.println("✓ Connecté");
-      mqttConnected = true;
-      
-      // Souscrire aux topics de commande
-      mqttClient.subscribe(topicRelayCmd);
-      Serial.println("✓ Souscrit à " + String(topicRelayCmd));
-      
-      // Publier l'état initial
-      mqttPublishStatus();
-    } else {
-      Serial.printf("✗ Erreur: code %d\n", mqttClient.state());
-      delay(3000);
-      attempts++;
-    }
+  // Reconnexion MQTT NON-BLOQUANTE (important pour garder HTTP réactif)
+  if (mqttClient.connected()) {
+    mqttConnected = true;
+    return;
   }
-  
-  if (!mqttClient.connected()) {
-    mqttConnected = false;
+
+  mqttConnected = false;
+
+  unsigned long now = millis();
+  if (now - lastMqttReconnectAttempt < mqttReconnectIntervalMs) {
+    return;
+  }
+  lastMqttReconnectAttempt = now;
+
+  Serial.print("Tentative MQTT... ");
+
+  bool ok = false;
+  if (mqttUser[0] == '\0') {
+    ok = mqttClient.connect(mqttClientID);
+  } else {
+    ok = mqttClient.connect(mqttClientID, mqttUser, mqttPassword);
+  }
+
+  if (ok) {
+    Serial.println("✓ Connecté");
+    mqttConnected = true;
+    mqttClient.subscribe(topicRelayCmd);
+    Serial.println("✓ Souscrit à " + String(topicRelayCmd));
+    mqttPublishStatus();
+  } else {
+    Serial.printf("✗ Erreur: code %d\n", mqttClient.state());
   }
 }
 
@@ -1051,11 +1051,9 @@ void loop() {
   
   // Gestion MQTT
   if (!mqttClient.connected()) {
-    Serial.println("✗ MQTT Déconnecté - reconnexion...");
     mqttReconnect();
   } else {
     mqttClient.loop();  // Process incoming messages
-    Serial.print(".");  // Signal que le loop tourne
     
     // Publier l'état régulièrement
     if (millis() - lastMqttPublish >= mqttPublishInterval) {
