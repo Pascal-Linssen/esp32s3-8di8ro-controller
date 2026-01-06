@@ -239,12 +239,12 @@ Devrait voir:
 ## 📚 RÉFÉRENCES
 
 ### Fichiers de Documentation
-- [docs/TECHNICAL_ANALYSIS.md](docs/TECHNICAL_ANALYSIS.md) - Analyse technique
-- [docs/MQTT_SOLUTION_ANALYSIS.md](docs/MQTT_SOLUTION_ANALYSIS.md) - Solution MQTT
+- [TECHNICAL_ANALYSIS.md](../TECHNICAL_ANALYSIS.md) - Analyse technique
+- [MQTT_SOLUTION_ANALYSIS.md](../MQTT_SOLUTION_ANALYSIS.md) - Solution MQTT
 
 ### Code Officiel Référence
-- [demo_officiel/Arduino/examples/MAIN_ALL/WS_TCA9554PWR.cpp](demo_officiel/Arduino/examples/MAIN_ALL/WS_TCA9554PWR.cpp)
-- [demo_officiel/Arduino/examples/MAIN_ALL/WS_Relay.cpp](demo_officiel/Arduino/examples/MAIN_ALL/WS_Relay.cpp)
+- [WS_TCA9554PWR.cpp](../../demo_officiel/Arduino/examples/MAIN_ALL/WS_TCA9554PWR.cpp)
+- [WS_Relay.cpp](../../demo_officiel/Arduino/examples/MAIN_ALL/WS_Relay.cpp)
 
 ---
 

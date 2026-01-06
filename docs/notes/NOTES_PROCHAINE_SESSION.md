@@ -107,7 +107,7 @@ mqttClient.setCallback(mqttCallback);  // C'EST CRUCIAL!
 
 - `src/main.cpp` - Cœur du firmware (569 lignes)
 - `src/web_config.h` - SPIFFS config management
-- `SESSION_SUMMARY.md` - Résumé complet de la session
+- `docs/notes/SESSION_SUMMARY.md` - Résumé complet de la session
 
 ## 🔗 GitHub
 - Repo: https://github.com/Pascal-Linssen/esp32s3-8di8ro-controller

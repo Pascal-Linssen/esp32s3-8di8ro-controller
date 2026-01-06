@@ -7,6 +7,8 @@
 #include <PubSubClient.h>
 #include <SPIFFS.h>
 #include <Update.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include "web_config.h"
 
 #ifndef ENABLE_OTA_HTTP
@@ -50,9 +52,22 @@ IPAddress dns1(8, 8, 8, 8);
 // Configuration MQTT (Mosquitto @ 192.168.1.200:1883)
 IPAddress mqttServer(192, 168, 1, 200);
 uint16_t mqttPort = 1883;
-// Ne pas stocker de credentials en dur dans le firmware (configurable via SPIFFS / interface Web).
-char mqttUser[50] = "";
-char mqttPassword[50] = "";
+// ========================= MQTT IDENTIFIANTS =========================
+// Identifiants MQTT utilisés par le firmware:
+// - Fallback "en dur": DEFAULT_MQTT_USER / DEFAULT_MQTT_PASSWORD (ci-dessous)
+// - Si SPIFFS est disponible, ces valeurs peuvent être SURCHARGÉES depuis /config.json
+//   via loadMQTTConfig() dans src/web_config.h (configurable depuis l'interface Web /api/config).
+//
+// NOTE: mettre des identifiants en dur n'est pas recommandé (ne pas commit sur Git).
+#ifndef DEFAULT_MQTT_USER
+#define DEFAULT_MQTT_USER ""
+#endif
+#ifndef DEFAULT_MQTT_PASSWORD
+#define DEFAULT_MQTT_PASSWORD ""
+#endif
+char mqttUser[50] = DEFAULT_MQTT_USER;
+char mqttPassword[50] = DEFAULT_MQTT_PASSWORD;
+// ====================================================================
 // Clé OTA (optionnelle). Si vide: OTA refusée.
 char otaKey[64] = "";
 const char* mqttClientID = "ESP32-S3-ETH";
@@ -64,6 +79,10 @@ char topicRelayStatus[100] = "waveshare/relay/status";
 char topicInputStatus[100] = "waveshare/input/status";
 char topicSensorStatus[100] = "waveshare/sensor/status";
 char topicSystemStatus[100] = "waveshare/system/status";
+
+// Labels I/O (utilisés pour la publication MQTT "_named" et via /api/config)
+char relayLabels[8][16] = {"relay1", "relay2", "relay3", "relay4", "relay5", "relay6", "relay7", "relay8"};
+char inputLabels[8][16] = {"input1", "input2", "input3", "input4", "input5", "input6", "input7", "input8"};
 
 // Pins des entrées digitales
 const int digitalInputs[8] = {4, 5, 6, 7, 8, 9, 10, 11};
@@ -78,6 +97,9 @@ bool relayStates[8] = {false};
 bool inputStates[8] = {false};
 bool serverStarted = false;
 
+// SPIFFS status (défini ici, utilisé dans web_config.h)
+bool spiffsReady = false;
+
 // Variables pour serveur HTTP simple
 uint16_t httpPort = 80;
 EthernetServerESP32 webServer(80);
@@ -91,12 +113,49 @@ const unsigned long mqttPublishInterval = 5000;  // Publier chaque 5s
 unsigned long lastMqttReconnectAttempt = 0;
 const unsigned long mqttReconnectIntervalMs = 3000;
 
+// Suivi du lien Ethernet (W5500)
+int lastEthLinkStatus = -1;
+unsigned long lastEthLinkCheck = 0;
+const unsigned long ethLinkCheckIntervalMs = 1000;
+
 // ===== FONCTIONS FORWARD =====
 void setRelay(int relay, bool state);
 void readInputs();
 void readSensors();
 String getHtmlPage();
 void handleHttpConnections();
+
+// ===== LOGS HTTP À DISTANCE (sans USB / sans MQTT) =====
+// Buffer circulaire en RAM, lisible via GET /api/logs
+static const size_t LOG_RING_LINES = 80;
+static String logRing[LOG_RING_LINES];
+static size_t logRingHead = 0;
+static size_t logRingCount = 0;
+
+static void logRingAddLine(const String &line) {
+  String s = line;
+  s.replace("\r", "");
+  // Limiter une ligne pour éviter l'explosion RAM
+  if (s.length() > 240) s = s.substring(0, 240) + "...";
+  logRing[logRingHead] = s;
+  logRingHead = (logRingHead + 1) % LOG_RING_LINES;
+  if (logRingCount < LOG_RING_LINES) logRingCount++;
+}
+
+static void logLine(const String &line) {
+  Serial.println(line);
+  logRingAddLine(line);
+}
+
+static void logLinef(const char *fmt, ...) {
+  char buf[256];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  Serial.println(buf);
+  logRingAddLine(String(buf));
+}
 void handleHttpLoop();
 void setupWebServer();
 void setupMqtt();
@@ -172,6 +231,8 @@ String getHtmlPage() {
   html += ".card {background:#0f1a14;border-radius:6px;box-shadow:none;padding:20px;margin:15px 0;border:1px solid #1c5a41;}";
   html += ".grid2 {display:grid;grid-template-columns:1fr 1fr;gap:20px;}";
   html += ".grid4 {display:grid;grid-template-columns:repeat(4,1fr);gap:15px;}";
+  html += "@media (max-width:900px){.grid2{grid-template-columns:1fr;}.grid4{grid-template-columns:repeat(2,1fr);}.cfg-row{grid-template-columns:1fr;}}";
+  html += "@media (max-width:520px){.grid4{grid-template-columns:1fr;}}";
   html += ".stat {text-align:center;padding:15px;background:#0b0f0d;border-radius:5px;border:1px solid #1c5a41;}";
   html += ".stat-value {font-size:24px;font-weight:bold;color:#7ef7c8;}";
   html += ".stat-label {font-size:12px;color:#b7d7c8;margin-top:5px;}";
@@ -180,6 +241,7 @@ String getHtmlPage() {
   html += ".relay-item.on {background:#0c1f18;border-color:#2ea87f;}";
   html += ".relay-item.off {background:#0e1311;border-color:#2b3a33;}";
   html += ".relay-num {font-size:14px;color:#b7d7c8;margin-bottom:10px;}";
+  html += ".io-label {display:block;margin-top:6px;font-size:12px;color:#7ef7c8;word-break:break-word;}";
   html += ".relay-status {font-size:18px;font-weight:bold;margin:10px 0;}";
   html += ".relay-btn {padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;width:100%;transition:all 0.3s;}";
   html += ".relay-btn.on {background:#2ea87f;color:#07130e;}";
@@ -244,7 +306,11 @@ String getHtmlPage() {
     html += (isOn ? "on" : "off");
     html += "'><div class='relay-num'>Relais ";
     html += String(i+1);
-    html += "</div><div class='relay-status' id='relay_status_";
+    html += "<span class='io-label' id='relay_label_";
+    html += String(i + 1);
+    html += "'>";
+    html += relayLabels[i];
+    html += "</span></div><div class='relay-status' id='relay_status_";
     html += String(i + 1);
     html += "'>";
     html += (isOn ? "ON" : "OFF");
@@ -279,7 +345,11 @@ String getHtmlPage() {
     html += (isActive ? "low" : "high");
     html += "'><div class='input-num'>Entrée ";
     html += String(i+1);
-    html += "</div><div class='input-status' id='input_status_";
+    html += "<span class='io-label' id='input_label_";
+    html += String(i + 1);
+    html += "'>";
+    html += inputLabels[i];
+    html += "</span></div><div class='input-status' id='input_status_";
     html += String(i + 1);
     html += "'>";
     html += (isActive ? "ACTIVE" : "INACTIVE");
@@ -319,6 +389,39 @@ String getHtmlPage() {
   html += "<span class='cfg-msg' id='cfg_msg'></span>";
   html += "</div>";
   html += "</div>";
+
+  // Section Noms I/O
+  html += "<div class='card'>";
+  html += "<h2>Noms des entrees / sorties</h2>";
+  html += "<div class='cfg-row'>";
+  html += "<div>";
+  for (int i = 0; i < 8; i++) {
+    html += "<div class='cfg-field'><label>Relais ";
+    html += String(i + 1);
+    html += "</label><input id='cfg_rl_";
+    html += String(i + 1);
+    html += "' maxlength='15' placeholder='";
+    html += relayLabels[i];
+    html += "'></div>";
+  }
+  html += "</div>";
+  html += "<div>";
+  for (int i = 0; i < 8; i++) {
+    html += "<div class='cfg-field'><label>Entree ";
+    html += String(i + 1);
+    html += "</label><input id='cfg_il_";
+    html += String(i + 1);
+    html += "' maxlength='15' placeholder='";
+    html += inputLabels[i];
+    html += "'></div>";
+  }
+  html += "</div>";
+  html += "</div>";
+  html += "<div class='cfg-actions'>";
+  html += "<button type='button' class='relay-btn on' onclick='saveConfig()'>Enregistrer</button>";
+  html += "<span class='cfg-msg'>Sauvegarde aussi IP/MQTT si modifies</span>";
+  html += "</div>";
+  html += "</div>";
   
   html += "<div class='card status-bar'>";
   html += "Systeme operationnel | Ethernet W5500 | IP: <span id='sb_ip'>";
@@ -330,30 +433,26 @@ String getHtmlPage() {
   
   html += "</div>";
   html += "<script>";
+  html += "var pollInFlight=false;";
+  html += "var last={t:null,h:null,mqtt:null,r:null,i:null};";
   html += "function callApi(path){return fetch(path,{cache:'no-store'}).then(function(r){return r.text();});}";
-  html += "function toggleRelay(n){callApi('/relay?num='+n+'&action=toggle').then(function(){setTimeout(pollStatus,120);});}";
-  html += "function toggleAllRelays(){callApi('/relay?action=all_toggle').then(function(){setTimeout(pollStatus,180);});}";
+  html += "function toggleRelay(n){callApi('/relay?num='+n+'&action=toggle').then(function(){setTimeout(pollStatus,150);});}";
+  html += "function toggleAllRelays(){callApi('/relay?action=all_toggle').then(function(){setTimeout(pollStatus,220);});}";
   html += "function getVal(id){var el=document.getElementById(id); if(!el) return ''; return (el.value||'').trim(); }";
-  html += "function setMsg(t){var el=document.getElementById('cfg_msg'); if(el) el.textContent=t; }";
-
-  html += "function setClass(el, onClass, offClass, isOn){ if(!el) return; el.classList.remove(onClass); el.classList.remove(offClass); el.classList.add(isOn?onClass:offClass); }";
-  html += "function pollStatus(){fetch('/api/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(s){";
-  html += "var tv=document.getElementById('temp_val'); if(tv) tv.textContent=(Number(s.t)||0).toFixed(1)+'°C';";
-  html += "var hv=document.getElementById('hum_val'); if(hv) hv.textContent=(Number(s.h)||0).toFixed(1)+'%';";
-  html += "var sm=document.getElementById('sys_mqtt'); if(sm) sm.textContent=(s.mqtt? 'CONNECTE':'DECONNECTE');";
-  html += "var sbm=document.getElementById('sb_mqtt'); if(sbm) sbm.textContent=(s.mqtt? 'CONNECTE':'DECONNECTE');";
-  html += "if(Array.isArray(s.r)){";
-  html += "for(var i=0;i<Math.min(8,s.r.length);i++){var n=i+1; var isOn=!!s.r[i];";
-  html += "var box=document.getElementById('relay_'+n); setClass(box,'on','off',isOn);";
-  html += "var st=document.getElementById('relay_status_'+n); if(st) st.textContent=isOn?'ON':'OFF';";
-  html += "var btn=document.getElementById('relay_btn_'+n); if(btn){ setClass(btn,'on','off',isOn); btn.textContent=isOn?'Toggle (actuellement ON)':'Toggle (actuellement OFF)'; }";
-  html += "}}";
-  html += "if(Array.isArray(s.i)){";
-  html += "for(var j=0;j<Math.min(8,s.i.length);j++){var n2=j+1; var isActive=!!s.i[j];";
-  html += "var ib=document.getElementById('input_'+n2); setClass(ib,'low','high',isActive);";
-  html += "var ist=document.getElementById('input_status_'+n2); if(ist) ist.textContent=isActive?'ACTIVE':'INACTIVE';";
-  html += "}}";
-  html += "}).catch(function(){});}";
+  html += "function setMsg(t){var el=document.getElementById('cfg_msg'); if(el && el.textContent!==t) el.textContent=t; }";
+  html += "function setText(id, txt){var el=document.getElementById(id); if(el && el.textContent!==txt) el.textContent=txt; }";
+  html += "function setVal(id, txt){var el=document.getElementById(id); if(el && el.value!==txt) el.value=txt; }";
+  html += "function normLabel(s){s=(s||'').trim(); if(s.length>15) s=s.substring(0,15); return s;}";
+  html += "function getLabelFromInput(inputId, spanId, fallback){var el=document.getElementById(inputId); var v=el?normLabel(el.value):''; if(!v){var sp=document.getElementById(spanId); v=sp?normLabel(sp.textContent):'';} if(!v) v=fallback; if(el && el.value!==v) el.value=v; return v;}";
+  html += "function setClass(el, onClass, offClass, isOn){ if(!el) return; var want=isOn?onClass:offClass; if(el.classList.contains(want)) return; el.classList.remove(onClass); el.classList.remove(offClass); el.classList.add(want); }";
+  html += "function sameArr(a,b){ if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length) return false; for(var k=0;k<a.length;k++){ if(!!a[k]!==!!b[k]) return false; } return true; }";
+  html += "function pollStatus(){ if(pollInFlight) return; pollInFlight=true; fetch('/api/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(s){";
+  html += "var tStr=(Number(s.t)||0).toFixed(1)+'°C'; if(last.t!==tStr){ last.t=tStr; setText('temp_val',tStr);}";
+  html += "var hStr=(Number(s.h)||0).toFixed(1)+'%'; if(last.h!==hStr){ last.h=hStr; setText('hum_val',hStr);}";
+  html += "var mqttStr=(s.mqtt? 'CONNECTE':'DECONNECTE'); if(last.mqtt!==mqttStr){ last.mqtt=mqttStr; setText('sys_mqtt',mqttStr); setText('sb_mqtt',mqttStr);}";
+  html += "if(Array.isArray(s.r) && !sameArr(last.r,s.r)){ last.r=s.r.slice(0,8); for(var i=0;i<Math.min(8,s.r.length);i++){var n=i+1; var isOn=!!s.r[i]; var box=document.getElementById('relay_'+n); setClass(box,'on','off',isOn); setText('relay_status_'+n, isOn?'ON':'OFF'); var btn=document.getElementById('relay_btn_'+n); if(btn){ setClass(btn,'on','off',isOn); var bt=isOn?'Toggle (actuellement ON)':'Toggle (actuellement OFF)'; if(btn.textContent!==bt) btn.textContent=bt; } } }";
+  html += "if(Array.isArray(s.i) && !sameArr(last.i,s.i)){ last.i=s.i.slice(0,8); for(var j=0;j<Math.min(8,s.i.length);j++){var n2=j+1; var isActive=!!s.i[j]; var ib=document.getElementById('input_'+n2); setClass(ib,'low','high',isActive); setText('input_status_'+n2, isActive?'ACTIVE':'INACTIVE'); } }";
+  html += "}).catch(function(){}).finally(function(){pollInFlight=false;});}";
   html += "function loadConfig(){fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){";
   html += "var ip=document.getElementById('cfg_ip'); if(ip) ip.placeholder=c.static_ip||ip.placeholder;";
   html += "var gw=document.getElementById('cfg_gw'); if(gw) gw.placeholder=c.gateway||gw.placeholder;";
@@ -362,6 +461,8 @@ String getHtmlPage() {
   html += "var mi=document.getElementById('cfg_mqtt_ip'); if(mi) mi.placeholder=c.broker_ip||mi.placeholder;";
   html += "var mp=document.getElementById('cfg_mqtt_port'); if(mp) mp.placeholder=String(c.broker_port||mp.placeholder);";
   html += "var mu=document.getElementById('cfg_mqtt_user'); if(mu) mu.placeholder=c.username||mu.placeholder;";
+  html += "if(Array.isArray(c.relay_labels)){for(var a=0;a<Math.min(8,c.relay_labels.length);a++){var n=a+1; var v=normLabel(c.relay_labels[a]); if(v){setText('relay_label_'+n,v); setVal('cfg_rl_'+n,v);} }}";
+  html += "if(Array.isArray(c.input_labels)){for(var b=0;b<Math.min(8,c.input_labels.length);b++){var n2=b+1; var v2=normLabel(c.input_labels[b]); if(v2){setText('input_label_'+n2,v2); setVal('cfg_il_'+n2,v2);} }}";
   html += "}).catch(function(){});}";
   html += "function saveConfig(){";
   html += "setMsg('Enregistrement...');";
@@ -374,15 +475,17 @@ String getHtmlPage() {
   html += "var p=getVal('cfg_mqtt_port'); if(p) payload.broker_port=parseInt(p,10);";
   html += "var u=getVal('cfg_mqtt_user'); if(u) payload.username=u;";
   html += "var pw=getVal('cfg_mqtt_pass'); if(pw) payload.password=pw;";
+  html += "var rlbl=[]; var ilbl=[]; for(var x=1;x<=8;x++){rlbl.push(getLabelFromInput('cfg_rl_'+x,'relay_label_'+x,'relay'+x)); ilbl.push(getLabelFromInput('cfg_il_'+x,'input_label_'+x,'input'+x));} payload.relay_labels=rlbl; payload.input_labels=ilbl;";
   html += "fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(res){";
+  html += "if(!res || res.ok!==1){setMsg('Erreur sauvegarde: '+((res&&res.error)?res.error:'inconnue')); return;}";
   html += "if(res && res.restart){setMsg('OK. Redemarrage...'); setTimeout(function(){ if(res.new_ip){location.href='http://'+res.new_ip+'/';} else {location.reload();}},1500);}";
-  html += "else {setMsg('OK. MQTT mis a jour.'); setTimeout(function(){location.reload();},500);}";
+  html += "else {setMsg('OK. Sauvegarde faite.'); var pwEl=document.getElementById('cfg_mqtt_pass'); if(pwEl) pwEl.value=''; loadConfig(); setTimeout(pollStatus,200);}";
   html += "}).catch(function(){setMsg('Erreur sauvegarde');});";
   html += "}";
   html += "loadConfig();";
-  html += "pollStatus(); setInterval(pollStatus,1000);";
+  html += "pollStatus(); setInterval(pollStatus,1500);";
   html += "</script>";
-  html += "<footer>API JSON: /api/status | Config: /api/config | Controle: /relay?num=N&action=toggle</footer>";
+  html += "<footer>API JSON: /api/status | Config: /api/config | Controle: /relay?num=N&action=toggle | MQTT: waveshare/relay/status_named & waveshare/input/status_named</footer>";
   html += "</body></html>";
   
   return html;
@@ -458,6 +561,15 @@ void mqttPublishStatus() {
   String relayStatus;
   serializeJson(relayDoc, relayStatus);
   mqttClient.publish(topicRelayStatus, relayStatus.c_str());
+
+  // État des relais "nommé" (clé = label)
+  StaticJsonDocument<384> relayNamedDoc;
+  for (int i = 0; i < 8; i++) {
+    relayNamedDoc[relayLabels[i]] = relayStates[i] ? 1 : 0;
+  }
+  String relayNamed;
+  serializeJson(relayNamedDoc, relayNamed);
+  mqttClient.publish("waveshare/relay/status_named", relayNamed.c_str());
   
   // État des entrées
   StaticJsonDocument<256> inputDoc;
@@ -467,6 +579,15 @@ void mqttPublishStatus() {
   String inputStatus;
   serializeJson(inputDoc, inputStatus);
   mqttClient.publish(topicInputStatus, inputStatus.c_str());
+
+  // État des entrées "nommé" (clé = label)
+  StaticJsonDocument<384> inputNamedDoc;
+  for (int i = 0; i < 8; i++) {
+    inputNamedDoc[inputLabels[i]] = inputStates[i] ? 1 : 0;
+  }
+  String inputNamed;
+  serializeJson(inputNamedDoc, inputNamed);
+  mqttClient.publish("waveshare/input/status_named", inputNamed.c_str());
   
   // État des capteurs
   StaticJsonDocument<128> sensorDoc;
@@ -495,6 +616,14 @@ void mqttReconnect() {
 
   mqttConnected = false;
 
+  // Ne pas spammer des tentatives si le lien Ethernet est down
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    return;
+  }
+  if (Ethernet.linkStatus() == LinkOFF) {
+    return;
+  }
+
   unsigned long now = millis();
   if (now - lastMqttReconnectAttempt < mqttReconnectIntervalMs) {
     return;
@@ -502,6 +631,9 @@ void mqttReconnect() {
   lastMqttReconnectAttempt = now;
 
   Serial.print("Tentative MQTT... ");
+
+  // Assainir le socket avant de retenter (utile après coupure de câble / reset)
+  ethClient.stop();
 
   bool ok = false;
   if (mqttUser[0] == '\0') {
@@ -527,6 +659,8 @@ void setupMqtt() {
   // Configurer le serveur MQTT
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(mqttCallback);
+  mqttClient.setKeepAlive(30);
+  mqttClient.setSocketTimeout(2);
   
   Serial.printf("Broker: %d.%d.%d.%d:%d\n", 
     mqttServer[0], mqttServer[1], mqttServer[2], mqttServer[3], mqttPort);
@@ -614,20 +748,29 @@ void handleHttpLoop() {
 
   size_t contentLength = 0;
   String otaKeyHeader = "";
+  bool isChunked = false;
   // Read headers
   while (client.connected()) {
     String line = client.readStringUntil('\n');
     line.trim();
     if (line.length() == 0) break;
-    if (line.startsWith("Content-Length:")) {
-      contentLength = (size_t)line.substring(String("Content-Length:").length()).toInt();
-    } else {
-      String lower = line;
-      lower.toLowerCase();
-      if (lower.startsWith("x-ota-key:")) {
-        otaKeyHeader = line.substring(String("X-OTA-Key:").length());
-        otaKeyHeader.trim();
+    String lower = line;
+    lower.toLowerCase();
+    if (lower.startsWith("content-length:")) {
+      int colon = line.indexOf(':');
+      if (colon >= 0) {
+        String v = line.substring(colon + 1);
+        v.trim();
+        contentLength = (size_t)v.toInt();
       }
+    } else if (lower.startsWith("transfer-encoding:")) {
+      if (lower.indexOf("chunked") >= 0) {
+        isChunked = true;
+      }
+    } else if (lower.startsWith("x-ota-key:")) {
+      int colon = line.indexOf(':');
+      otaKeyHeader = (colon >= 0) ? line.substring(colon + 1) : "";
+      otaKeyHeader.trim();
     }
   }
 
@@ -772,22 +915,94 @@ void handleHttpLoop() {
 #endif
 
   String body = "";
-  if (method == "POST" && contentLength > 0) {
-    body.reserve(contentLength + 1);
-    uint32_t start = millis();
-    while (body.length() < contentLength && client.connected()) {
-      if (client.available()) {
-        body += (char)client.read();
+  if (method == "POST") {
+    if (contentLength > 0) {
+      body.reserve(contentLength + 1);
+      uint32_t start = millis();
+      while (body.length() < contentLength && client.connected()) {
+        if (client.available()) {
+          body += (char)client.read();
+          start = millis();
+        } else {
+          if (millis() - start > 500) break;
+          delay(1);
+        }
+      }
+    } else if (isChunked && path == "/api/config") {
+      // Décodage minimal du chunked encoding (suffisant pour le JSON de config)
+      const size_t MAX_BODY = 2048;
+      uint32_t start = millis();
+      while (client.connected()) {
+        if (millis() - start > 2000) break;
+        String sizeLine = client.readStringUntil('\n');
+        sizeLine.trim();
+        if (sizeLine.length() == 0) continue;
+        char *endptr = nullptr;
+        unsigned long chunkSize = strtoul(sizeLine.c_str(), &endptr, 16);
+        if (chunkSize == 0) {
+          // Consommer la ligne vide finale si présente
+          client.readStringUntil('\n');
+          break;
+        }
+        while (client.connected() && client.available() < (int)chunkSize) {
+          if (millis() - start > 2000) break;
+          delay(1);
+        }
+        for (unsigned long i = 0; i < chunkSize && client.connected(); i++) {
+          int c = client.read();
+          if (c < 0) break;
+          if (body.length() < MAX_BODY) body += (char)c;
+        }
+        // Consommer CRLF après le chunk
+        client.readStringUntil('\n');
         start = millis();
-      } else {
-        if (millis() - start > 500) break;
-        delay(1);
       }
     }
   }
 
+  auto sanitizeJsonForLog = [](String s) -> String {
+    // Masquer le mot de passe si présent: "password":"..."
+    int keyPos = s.indexOf("\"password\"");
+    if (keyPos < 0) return s;
+    int colon = s.indexOf(':', keyPos);
+    if (colon < 0) return s;
+    int firstQuote = s.indexOf('"', colon);
+    if (firstQuote < 0) return s;
+    int secondQuote = s.indexOf('"', firstQuote + 1);
+    if (secondQuote < 0) return s;
+    String prefix = s.substring(0, firstQuote + 1);
+    String suffix = s.substring(secondQuote);
+    return prefix + "***" + suffix;
+  };
+
   // Routing
-  if (method == "GET" && path == "/api/status") {
+  if (method == "GET" && path == "/api/logs") {
+    // Retourne les dernières lignes de log (buffer circulaire RAM)
+    String out;
+    out.reserve(logRingCount * 64);
+    size_t start = (logRingCount == LOG_RING_LINES) ? logRingHead : 0;
+    for (size_t i = 0; i < logRingCount; i++) {
+      size_t idx = (start + i) % LOG_RING_LINES;
+      if (logRing[idx].length() == 0) continue;
+      out += logRing[idx];
+      out += "\n";
+    }
+    sendHttp(client, "200 OK", "text/plain; charset=utf-8", out);
+  } else if (method == "GET" && path == "/api/config_raw") {
+    // Diagnostic: renvoie le contenu brut de /config.json (si présent)
+    if (!spiffsReady || !SPIFFS.exists(CONFIG_FILE)) {
+      sendHttp(client, "404 Not Found", "text/plain; charset=utf-8", "config_not_found");
+    } else {
+      File f = SPIFFS.open(CONFIG_FILE, "r");
+      if (!f) {
+        sendHttp(client, "500 Internal Server Error", "text/plain; charset=utf-8", "config_open_failed");
+      } else {
+        String content = f.readString();
+        f.close();
+        sendHttp(client, "200 OK", "application/json", content);
+      }
+    }
+  } else if (method == "GET" && path == "/api/status") {
     DynamicJsonDocument doc(768);
     JsonArray r = doc.createNestedArray("r");
     JsonArray i = doc.createNestedArray("i");
@@ -799,12 +1014,17 @@ void handleHttpLoop() {
     doc["h"] = humidity;
     doc["mqtt"] = mqttConnected ? 1 : 0;
     doc["uptime_ms"] = millis();
+    doc["ip"] = Ethernet.localIP().toString();
+    doc["ip_cfg"] = staticIP.toString();
+    doc["gw_cfg"] = gateway.toString();
+    doc["subnet_cfg"] = subnet.toString();
+    doc["dns1_cfg"] = dns1.toString();
 
     String body;
     serializeJson(doc, body);
     sendHttp(client, "200 OK", "application/json", body);
   } else if (method == "GET" && path == "/api/config") {
-    DynamicJsonDocument doc(512);
+    DynamicJsonDocument doc(1024);
     doc["static_ip"] = staticIP.toString();
     doc["gateway"] = gateway.toString();
     doc["subnet"] = subnet.toString();
@@ -814,25 +1034,49 @@ void handleHttpLoop() {
     doc["username"] = mqttUser;
     doc["ota_key_set"] = (otaKey[0] != '\0') ? 1 : 0;
     doc["mqtt_connected"] = mqttConnected ? 1 : 0;
+
+    JsonArray rlbl = doc.createNestedArray("relay_labels");
+    JsonArray ilbl = doc.createNestedArray("input_labels");
+    for (int i = 0; i < 8; i++) {
+      rlbl.add(relayLabels[i]);
+      ilbl.add(inputLabels[i]);
+    }
+
     String out;
     serializeJson(doc, out);
     sendHttp(client, "200 OK", "application/json", out);
   } else if (method == "POST" && path == "/api/config") {
-    DynamicJsonDocument doc(512);
+    DynamicJsonDocument doc(1024);
     DynamicJsonDocument resp(256);
 
+    logLine("\n[HTTP] POST /api/config");
+    logLinef("  Content-Length: %u", (unsigned)contentLength);
+    logLinef("  Body length: %u", (unsigned)body.length());
+    if (body.length() > 0) {
+      String preview = body;
+      if (preview.length() > 512) preview = preview.substring(0, 512) + "...";
+      logLinef("  Body preview: %s", sanitizeJsonForLog(preview).c_str());
+    }
+
     IPAddress oldIp = staticIP;
+    IPAddress oldGw = gateway;
+    IPAddress oldMask = subnet;
+    IPAddress oldDns = dns1;
     IPAddress oldMqtt = mqttServer;
     uint16_t oldPort = mqttPort;
 
     DeserializationError err = deserializeJson(doc, body);
     if (err) {
+      logLinef("  JSON error: %s", err.c_str());
       resp["ok"] = 0;
       resp["error"] = "bad_json";
+      resp["body_len"] = (unsigned)body.length();
+      resp["content_len"] = (unsigned)contentLength;
       String out;
       serializeJson(resp, out);
       sendHttp(client, "400 Bad Request", "application/json", out);
     } else {
+      logLine("  JSON OK -> applying fields");
       if (doc.containsKey("static_ip")) {
         String ipStr = doc["static_ip"].as<String>();
         IPAddress parsed;
@@ -890,12 +1134,47 @@ void handleHttpLoop() {
         }
       }
 
-      saveMQTTConfig();
+      // Mise à jour des labels (optionnel)
+      if (doc.containsKey("relay_labels") && doc["relay_labels"].is<JsonArray>()) {
+        JsonArray arr = doc["relay_labels"].as<JsonArray>();
+        for (int i = 0; i < 8 && i < (int)arr.size(); i++) {
+          const char *v = arr[i] | "";
+          if (v && strlen(v) > 0) strlcpy(relayLabels[i], v, sizeof(relayLabels[i]));
+        }
+      }
+      if (doc.containsKey("input_labels") && doc["input_labels"].is<JsonArray>()) {
+        JsonArray arr = doc["input_labels"].as<JsonArray>();
+        for (int i = 0; i < 8 && i < (int)arr.size(); i++) {
+          const char *v = arr[i] | "";
+          if (v && strlen(v) > 0) strlcpy(inputLabels[i], v, sizeof(inputLabels[i]));
+        }
+      }
 
-      bool needRestart = (oldIp != staticIP);
+      if (!saveMQTTConfig()) {
+        resp["ok"] = 0;
+        resp["error"] = "spiffs_save_failed";
+        String out;
+        serializeJson(resp, out);
+        sendHttp(client, "500 Internal Server Error", "application/json", out);
+        delay(5);
+        client.stop();
+        return;
+      }
+
+      logLinef("  Saved. IP=%s GW=%s MQTT=%s:%u user=%s pass_set=%s",
+               staticIP.toString().c_str(),
+               gateway.toString().c_str(),
+               mqttServer.toString().c_str(),
+               (unsigned)mqttPort,
+               mqttUser,
+               (mqttPassword[0] != '\0') ? "YES" : "NO");
+
+      bool needRestart = (oldIp != staticIP) || (oldGw != gateway) || (oldMask != subnet) || (oldDns != dns1);
       resp["ok"] = 1;
       resp["restart"] = needRestart ? 1 : 0;
       if (needRestart) resp["new_ip"] = staticIP.toString();
+      resp["current_ip"] = Ethernet.localIP().toString();
+      resp["desired_ip"] = staticIP.toString();
 
       String out;
       serializeJson(resp, out);
@@ -940,6 +1219,8 @@ void setup() {
   // Initialisation SPIFFS et chargement config AVANT Ethernet.begin (pour appliquer l'IP)
   initSPIFFS();
   loadMQTTConfig();
+  Serial.printf("MQTT user (boot): %s\n", mqttUser);
+  Serial.printf("MQTT pass set (boot): %s\n", (mqttPassword[0] != '\0') ? "YES" : "NO");
   Serial.println("\n\n╔════════════════════════════════════════╗");
   Serial.println("║ === DÉMARRAGE ESP32-S3-ETH-8DI-8RO ═══ ║");
   Serial.println("╚════════════════════════════════════════╝");
@@ -1026,6 +1307,8 @@ void setup() {
     Serial.print("✓ IP Ethernet: ");
     Serial.println(Ethernet.localIP());
   }
+
+  lastEthLinkStatus = Ethernet.linkStatus();
   
   serverStarted = true;
   Serial.println("✓ Serveur HTTP sur port 80");
@@ -1047,6 +1330,30 @@ void setup() {
 void loop() {
   // Maintenir la connexion Ethernet
   Ethernet.maintain();
+
+  // Surveiller le lien Ethernet et déclencher une reconnexion MQTT si besoin
+  unsigned long now = millis();
+  if (now - lastEthLinkCheck >= ethLinkCheckIntervalMs) {
+    lastEthLinkCheck = now;
+    int link = Ethernet.linkStatus();
+    if (link != lastEthLinkStatus) {
+      lastEthLinkStatus = link;
+      if (link == LinkOFF) {
+        Serial.println("⚠️ Ethernet link OFF -> MQTT disconnect");
+        mqttConnected = false;
+        mqttClient.disconnect();
+        ethClient.stop();
+      } else if (link == LinkON) {
+        Serial.println("✓ Ethernet link ON -> MQTT reconnect pending");
+        mqttConnected = false;
+        mqttClient.disconnect();
+        ethClient.stop();
+        lastMqttReconnectAttempt = 0;
+      } else {
+        Serial.println("⚠️ Ethernet link status unknown");
+      }
+    }
+  }
   
   // Gestion HTTP Web Server
   handleHttpLoop();
@@ -1055,12 +1362,18 @@ void loop() {
   if (!mqttClient.connected()) {
     mqttReconnect();
   } else {
-    mqttClient.loop();  // Process incoming messages
-    
-    // Publier l'état régulièrement
-    if (millis() - lastMqttPublish >= mqttPublishInterval) {
-      lastMqttPublish = millis();
-      mqttPublishStatus();
+    // loop() retourne false quand la connexion est perdue; on force disconnect pour relancer mqttReconnect()
+    if (!mqttClient.loop()) {
+      mqttConnected = false;
+      mqttClient.disconnect();
+      ethClient.stop();
+    } else {
+      mqttConnected = true;
+      // Publier l'état régulièrement
+      if (millis() - lastMqttPublish >= mqttPublishInterval) {
+        lastMqttPublish = millis();
+        mqttPublishStatus();
+      }
     }
   }
   

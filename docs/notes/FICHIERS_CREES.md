@@ -11,13 +11,13 @@
 - **Contenu**: Vue d'ensemble complète, checklist installation, ressources
 - **Créé**: Session actuelle
 
-#### 2. **INSTALLATION_RAPIDE.md** ⭐⭐⭐
+#### 2. **docs/INSTALLATION_RAPIDE.md** ⭐⭐⭐
 - **Type**: Guide d'installation
 - **Durée**: 5 minutes
 - **Contenu**: Étapes exactes pour installer la solution
 - **Créé**: Session actuelle
 
-#### 3. **SOLUTION_SUMMARY.md** ⭐⭐⭐
+#### 3. **docs/notes/SOLUTION_SUMMARY.md** ⭐⭐⭐
 - **Type**: Résumé visuel avec diagrammes ASCII
 - **Durée**: 3 minutes
 - **Contenu**: Diagrammes du problème, architecture, code
@@ -27,7 +27,7 @@
 
 ### 📚 Documentation Détaillée
 
-#### 4. **README_MQTT_SOLUTION.md**
+#### 4. **docs/mqtt/README_MQTT_SOLUTION.md**
 - **Type**: Vue d'ensemble générale
 - **Durée**: 10 minutes
 - **Contenu**: Résumé, comparaison, ressources
@@ -80,11 +80,11 @@
 
 ### 🧪 Fichiers de Test
 
-#### 11. **test_mqtt_fixed.py**
+#### 11. **tools/tests/test_mqtt_fixed.py**
 - **Type**: Script Python
 - **Durée d'exécution**: 1-2 minutes
 - **Contenu**: Test complet des callbacks MQTT
-- **Instruction**: `python3 test_mqtt_fixed.py`
+- **Instruction**: `python3 tools/tests/test_mqtt_fixed.py`
 - **Créé**: Session actuelle
 
 ---
@@ -94,16 +94,16 @@
 | # | Fichier | Type | État | Durée |
 |---|---------|------|------|-------|
 | 1 | SOLUTION_FINALE.md | 📝 Doc | ✅ Prêt | 5 min |
-| 2 | INSTALLATION_RAPIDE.md | 📝 Doc | ✅ Prêt | 5 min |
-| 3 | SOLUTION_SUMMARY.md | 📝 Doc | ✅ Prêt | 3 min |
-| 4 | README_MQTT_SOLUTION.md | 📝 Doc | ✅ Prêt | 10 min |
+| 2 | docs/INSTALLATION_RAPIDE.md | 📝 Doc | ✅ Prêt | 5 min |
+| 3 | docs/notes/SOLUTION_SUMMARY.md | 📝 Doc | ✅ Prêt | 3 min |
+| 4 | docs/mqtt/README_MQTT_SOLUTION.md | 📝 Doc | ✅ Prêt | 10 min |
 | 5 | docs/MQTT_SOLUTION_ANALYSIS.md | 📝 Doc | ✅ Prêt | 20 min |
 | 6 | docs/MIGRATION_GUIDE.md | 📝 Doc | ✅ Prêt | 15 min |
 | 7 | docs/EXTERNAL_RESEARCH.md | 📝 Doc | ✅ Prêt | 15 min |
 | 8 | INDEX_SOLUTION.md | 📝 Doc | ✅ Prêt | 5 min |
 | 9 | src/main_mqtt_fixed.cpp | 💻 Code | ✅ Prêt | - |
 | 10 | platformio_mqtt_fixed.ini | ⚙️ Config | ✅ Prêt | - |
-| 11 | test_mqtt_fixed.py | 🧪 Test | ✅ Prêt | 2 min |
+| 11 | tools/tests/test_mqtt_fixed.py | 🧪 Test | ✅ Prêt | 2 min |
 
 **Total**: 11 fichiers créés  
 **Temps lecture complet**: ~1.5 heures  
@@ -117,11 +117,15 @@
 ```
 esp32s3_8di8ro_full/
 │
-├── 📄 SOLUTION_FINALE.md              ← LIRE EN PREMIER (5 min)
-├── 📄 INSTALLATION_RAPIDE.md          ← Installation (5 min)
-├── 📄 SOLUTION_SUMMARY.md             ← Résumé visuel (3 min)
-├── 📄 README_MQTT_SOLUTION.md         ← Vue d'ensemble (10 min)
-├── 📄 INDEX_SOLUTION.md               ← Index navigation (5 min)
+├── docs/
+│   ├── 📄 INSTALLATION_RAPIDE.md       ← Installation (5 min)
+│   ├── mqtt/
+│   │   └── 📄 README_MQTT_SOLUTION.md  ← Vue d'ensemble (10 min)
+│   └── notes/
+│       ├── 📄 SOLUTION_FINALE.md       ← LIRE EN PREMIER (5 min)
+│       ├── 📄 SOLUTION_SUMMARY.md      ← Résumé visuel (3 min)
+│       └── ...
+├── 📄 INDEX_SOLUTION.md                ← Index navigation (5 min)
 │
 ├── src/
 │   ├── 📄 main_mqtt_fixed.cpp         ✅ CODE NOUVEAU (À UTILISER)
@@ -134,7 +138,9 @@ esp32s3_8di8ro_full/
 │   └── ... autres fichiers
 │
 ├── 📄 platformio_mqtt_fixed.ini       ⚙️ CONFIG NOUVELLE
-├── 📄 test_mqtt_fixed.py              🧪 TEST
+├── tools/
+│   └── tests/
+│       └── 📄 test_mqtt_fixed.py      🧪 TEST
 │
 └── ... autres fichiers du projet
 ```
@@ -173,9 +179,9 @@ esp32s3_8di8ro_full/
 4. Compiler et tester
 
 ### Court terme (30 minutes)
-1. Lire INSTALLATION_RAPIDE.md en détail
-2. Lire SOLUTION_SUMMARY.md pour visualisation
-3. Tester avec test_mqtt_fixed.py
+1. Lire docs/INSTALLATION_RAPIDE.md en détail
+2. Lire docs/notes/SOLUTION_SUMMARY.md pour visualisation
+3. Tester avec tools/tests/test_mqtt_fixed.py
 4. Vérifier que callbacks fonctionnent
 
 ### Long terme (optionnel)
@@ -192,7 +198,7 @@ esp32s3_8di8ro_full/
 Fichiers documentations créés: 8
 Fichiers code créés: 1 (main_mqtt_fixed.cpp)
 Fichiers config créés: 1 (platformio_mqtt_fixed.ini)
-Fichiers test créés: 1 (test_mqtt_fixed.py)
+Fichiers test créés: 1 (tools/tests/test_mqtt_fixed.py)
 
 Lignes de documentation: ~2,500+ lignes
 Lignes de code: ~350 lignes
@@ -231,7 +237,7 @@ pio run
 pio run --target upload
 
 # 6. Tester
-python3 test_mqtt_fixed.py
+python3 tools/tests/test_mqtt_fixed.py
 
 # 7. Vérifier dans la console
 # Vous devriez voir: "🎯 MQTT MESSAGE RECEIVED"
@@ -251,7 +257,7 @@ python3 test_mqtt_fixed.py
 
 ## 📞 Support
 
-- **Installation**: Lire INSTALLATION_RAPIDE.md
+- **Installation**: Lire docs/INSTALLATION_RAPIDE.md
 - **Problèmes**: Lire INDEX_SOLUTION.md → section Troubleshooting
 - **Compréhension**: Lire MQTT_SOLUTION_ANALYSIS.md
 - **Changements de code**: Lire MIGRATION_GUIDE.md
@@ -299,7 +305,7 @@ Vous avez maintenant:
 ║     ✅ Fichiers créés: 11                         ║
 ║     ✅ Documentation: 2,500+ lignes               ║
 ║     ✅ Code fourni: main_mqtt_fixed.cpp           ║
-║     ✅ Tests fournis: test_mqtt_fixed.py          ║
+║     ✅ Tests fournis: tools/tests/test_mqtt_fixed.py ║
 ║     ✅ Installation: 5 minutes                    ║
 ║                                                    ║
 ║     Prêt à déployer maintenant! 🚀               ║
@@ -316,4 +322,4 @@ Vous avez maintenant:
 **Problème résolu**: OUI  
 **Callbacks fonctionnent**: OUI  
 
-**Prochaine étape**: Lire INSTALLATION_RAPIDE.md et commencer! 🚀
+**Prochaine étape**: Lire docs/INSTALLATION_RAPIDE.md et commencer! 🚀

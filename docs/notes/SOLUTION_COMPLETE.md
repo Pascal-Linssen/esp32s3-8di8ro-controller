@@ -311,10 +311,10 @@ SPIFFS            # File system
 
 ## 📝 FICHIERS CLÉS
 
-- [src/main.cpp](src/main.cpp) - Code principal
-- [platformio.ini](platformio.ini) - Configuration projet
-- [mqtt_test_final.py](mqtt_test_final.py) - Script test Python
-- [mqtt_listener.py](mqtt_listener.py) - Écoute MQTT
+- [main.cpp](../../src/main.cpp) - Code principal
+- [platformio.ini](../../platformio.ini) - Configuration projet
+- [mqtt_test_final.py](../../tools/mqtt/mqtt_test_final.py) - Script test Python
+- [mqtt_listener.py](../../tools/mqtt/mqtt_listener.py) - Écoute MQTT
 
 ---
 

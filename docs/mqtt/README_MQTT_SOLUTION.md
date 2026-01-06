@@ -46,7 +46,7 @@ Ce dossier contient la **solution complète** pour fixer le problème des callba
 ### 📚 Documentation
 | Fichier | Description |
 |---------|---|
-| `INSTALLATION_RAPIDE.md` | ⚡ **COMMENCER ICI** - Installation en 5 min |
+| `docs/INSTALLATION_RAPIDE.md` | ⚡ **COMMENCER ICI** - Installation en 5 min |
 | `docs/MIGRATION_GUIDE.md` | 📖 Guide détaillé des changements |
 | `docs/MQTT_SOLUTION_ANALYSIS.md` | 🔬 Analyse technique du problème |
 | `docs/EXTERNAL_RESEARCH.md` | 🔍 Ressources et recherches |
@@ -54,14 +54,14 @@ Ce dossier contient la **solution complète** pour fixer le problème des callba
 ### 🧪 Tests
 | Fichier | Description |
 |---------|---|
-| `test_mqtt_fixed.py` | Script Python pour tester les callbacks |
+| `tools/tests/test_mqtt_fixed.py` | Script Python pour tester les callbacks |
 
 ---
 
 ## 🚀 Pour Commencer
 
 ### Option 1 : Installation Rapide (⏱️ 5 minutes)
-1. Lire `INSTALLATION_RAPIDE.md`
+1. Lire `docs/INSTALLATION_RAPIDE.md`
 2. Copier `src/main_mqtt_fixed.cpp` vers `src/main.cpp`
 3. Mettre à jour `platformio.ini` (changer PubSubClient en 256dpi/MQTT)
 4. Compiler et tester !
@@ -229,7 +229,7 @@ Après installation, vous devriez voir dans la console :
 
 ## 📞 Support
 
-- **Question rapide** : Voir `INSTALLATION_RAPIDE.md`
+- **Question rapide** : Voir `docs/INSTALLATION_RAPIDE.md`
 - **Comprendre le problème** : Voir `docs/MQTT_SOLUTION_ANALYSIS.md`
 - **Guide de migration** : Voir `docs/MIGRATION_GUIDE.md`
 - **Code complet** : Voir `src/main_mqtt_fixed.cpp`

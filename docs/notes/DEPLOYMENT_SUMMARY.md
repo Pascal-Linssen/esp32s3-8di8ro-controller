@@ -33,10 +33,10 @@ Latest commit: a6479a0 (16 Dec 2025)
 
 ```
 📄 README.md                    - Setup & quickstart
-📄 SESSION_SUMMARY.md           - Récap complet session
-📄 NOTES_PROCHAINE_SESSION.md   - Guide debug MQTT
+📄 docs/notes/SESSION_SUMMARY.md           - Récap complet session
+📄 docs/notes/NOTES_PROCHAINE_SESSION.md   - Guide debug MQTT
 📄 CHANGELOG.md                 - Version history
-📄 CONFIG_MQTT.md               - Config persistence docs
+📄 docs/mqtt/CONFIG_MQTT.md               - Config persistence docs
 ```
 
 ---

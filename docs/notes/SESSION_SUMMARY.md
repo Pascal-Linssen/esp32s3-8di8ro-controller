@@ -112,13 +112,13 @@ src/
 
 Scripts/
 ├── configure_mqtt.py - CLI pour editer config
-├── mqtt_test.py - Test connectivity
+├── tools/mqtt/mqtt_test.py - Test connectivity
 ├── erase_spiffs.py - Wipe SPIFFS
 └── test_cli_serial.py - Serial commands
 
 Docs/
-├── CONFIG_MQTT.md - Documentation config
-├── SESSION_SUMMARY.md (this file)
+├── docs/mqtt/CONFIG_MQTT.md - Documentation config
+├── docs/notes/SESSION_SUMMARY.md (this file)
 
 Config/
 └── platformio.ini - Optimisé pour ESP32-S3

@@ -55,7 +55,7 @@ pio run --target upload
 
 ### 6️⃣ Tester
 ```bash
-python3 test_mqtt_fixed.py
+python3 tools/tests/test_mqtt_fixed.py
 ```
 
 ---
@@ -102,7 +102,7 @@ pio run
 | `docs/MIGRATION_GUIDE.md` | Guide détaillé des changements |
 | `docs/MQTT_SOLUTION_ANALYSIS.md` | Analyse du problème |
 | `docs/EXTERNAL_RESEARCH.md` | Ressources trouvées |
-| `test_mqtt_fixed.py` | Script de test |
+| `tools/tests/test_mqtt_fixed.py` | Script de test |
 
 ---
 

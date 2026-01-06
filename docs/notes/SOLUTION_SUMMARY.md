@@ -304,12 +304,12 @@ AFTER:     ✅ Callbacks: Working!
 
 ## 📞 Next Steps
 
-1. Read: `INSTALLATION_RAPIDE.md` (5 min)
+1. Read: `docs/INSTALLATION_RAPIDE.md` (5 min)
 2. Copy: `src/main_mqtt_fixed.cpp` → `src/main.cpp`
 3. Update: `platformio.ini` (change one line)
 4. Compile: `pio run`
 5. Upload: `pio run --target upload`
-6. Test: `python3 test_mqtt_fixed.py`
+6. Test: `python3 tools/tests/test_mqtt_fixed.py`
 7. Celebrate: 🎉 Callbacks work!
 
 ---

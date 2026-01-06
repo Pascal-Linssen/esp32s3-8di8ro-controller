@@ -212,13 +212,13 @@ esp32s3_8di8ro_full/
 
 ### Décision 1: Installation
 ```
-Option A: Rapide      → Lire INSTALLATION_RAPIDE.md       (5 min)
+Option A: Rapide      → Lire docs/INSTALLATION_RAPIDE.md  (5 min)
 Option B: Complète    → Lire tous les docs                (1 heure)
 ```
 
 ### Décision 2: Compréhension
 ```
-Option A: Visuelle    → Lire SOLUTION_SUMMARY.md          (3 min)
+Option A: Visuelle    → Lire docs/notes/SOLUTION_SUMMARY.md (3 min)
 Option B: Technique   → Lire MQTT_SOLUTION_ANALYSIS.md    (20 min)
 Option C: Détails     → Lire MIGRATION_GUIDE.md           (15 min)
 ```
@@ -254,7 +254,7 @@ Option C: Comprendre  → Lire le code annoté               (15 min)
 - [ ] Upload : `pio run --target upload`
 - [ ] Ouvrir console série
 - [ ] Vérifier "MQTT connected"
-- [ ] Lancer test_mqtt_fixed.py
+- [ ] Lancer tools/tests/test_mqtt_fixed.py
 - [ ] Vérifier "MQTT MESSAGE RECEIVED"
 - [ ] ✅ Done! Callbacks fonctionnent!
 
@@ -263,13 +263,13 @@ Option C: Comprendre  → Lire le code annoté               (15 min)
 ## 🔗 Dépendances Entre Fichiers
 
 ```
-INSTALLATION_RAPIDE.md
+docs/INSTALLATION_RAPIDE.md
 ├─ Référence → src/main_mqtt_fixed.cpp
 ├─ Référence → platformio.ini
 └─ Référence → MIGRATION_GUIDE.md
 
-README_MQTT_SOLUTION.md
-├─ Référence → SOLUTION_SUMMARY.md
+docs/mqtt/README_MQTT_SOLUTION.md
+├─ Référence → docs/notes/SOLUTION_SUMMARY.md
 ├─ Référence → MQTT_SOLUTION_ANALYSIS.md
 └─ Référence → MIGRATION_GUIDE.md
 
@@ -283,7 +283,7 @@ MIGRATION_GUIDE.md
 ├─ Référence → main.cpp
 └─ Référence → platformio_mqtt_fixed.ini
 
-test_mqtt_fixed.py
+tools/tests/test_mqtt_fixed.py
 └─ Teste → main_mqtt_fixed.cpp
 ```
 
@@ -308,28 +308,28 @@ Résultat final: Callbacks MQTT fonctionnent! 🎉
 ## 🎓 Ordre de Lecture Recommandé
 
 ### Pour Utilisateurs Pressés (10 minutes)
-1. **SOLUTION_SUMMARY.md** - Vue rapide visuelle
-2. **INSTALLATION_RAPIDE.md** - Faire l'installation
-3. **test_mqtt_fixed.py** - Vérifier que ça marche
+1. **docs/notes/SOLUTION_SUMMARY.md** - Vue rapide visuelle
+2. **docs/INSTALLATION_RAPIDE.md** - Faire l'installation
+3. **tools/tests/test_mqtt_fixed.py** - Vérifier que ça marche
 → **TERMINÉ!** ✅
 
 ### Pour Utilisateurs Intéressés (45 minutes)
-1. **SOLUTION_SUMMARY.md** - Vue visuelle
-2. **README_MQTT_SOLUTION.md** - Contexte complet
+1. **docs/notes/SOLUTION_SUMMARY.md** - Vue visuelle
+2. **docs/mqtt/README_MQTT_SOLUTION.md** - Contexte complet
 3. **MQTT_SOLUTION_ANALYSIS.md** - Analyse détaillée
-4. **INSTALLATION_RAPIDE.md** - Installer
-5. **test_mqtt_fixed.py** - Tester
+4. **docs/INSTALLATION_RAPIDE.md** - Installer
+5. **tools/tests/test_mqtt_fixed.py** - Tester
 → **COMPRIS & INSTALLÉ!** ✅
 
 ### Pour Utilisateurs Curieux (1h30)
-1. **SOLUTION_SUMMARY.md** - Vue visuelle
-2. **README_MQTT_SOLUTION.md** - Contexte
+1. **docs/notes/SOLUTION_SUMMARY.md** - Vue visuelle
+2. **docs/mqtt/README_MQTT_SOLUTION.md** - Contexte
 3. **MQTT_SOLUTION_ANALYSIS.md** - Analyse technique
 4. **MIGRATION_GUIDE.md** - Étapes détaillées
 5. **EXTERNAL_RESEARCH.md** - Sources externes
 6. **src/main_mqtt_fixed.cpp** - Code annoté
-7. **INSTALLATION_RAPIDE.md** - Installer
-8. **test_mqtt_fixed.py** - Tester
+7. **docs/INSTALLATION_RAPIDE.md** - Installer
+8. **tools/tests/test_mqtt_fixed.py** - Tester
 → **EXPERT DE LA SOLUTION!** 🚀
 
 ---
@@ -340,11 +340,11 @@ Résultat final: Callbacks MQTT fonctionnent! 🎉
 Étape         Document à Consulter
 ────────────────────────────────────────
 Installation  → INSTALLATION_RAPIDE.md
-Comprendre    → SOLUTION_SUMMARY.md
+Comprendre    → docs/notes/SOLUTION_SUMMARY.md
 Détails tech  → MQTT_SOLUTION_ANALYSIS.md
 Code details  → MIGRATION_GUIDE.md
 Compilation   → MIGRATION_GUIDE.md (Troubleshooting)
-Test          → test_mqtt_fixed.py
+Test          → tools/tests/test_mqtt_fixed.py
 Ressources    → EXTERNAL_RESEARCH.md
 ```
 
@@ -352,7 +352,7 @@ Ressources    → EXTERNAL_RESEARCH.md
 
 ## 📝 Fichier Actuel
 
-**Vous lisez** : INDEX.md (ce fichier)
+**Vous lisez** : INDEX_SOLUTION.md (ce fichier)
 **Contenu** : Guide de navigation complet
 **Utilité** : Savoir où trouver les infos
 **Prochaine étape** : Choisir un chemin ci-dessus ⬆️
@@ -366,7 +366,7 @@ Ressources    → EXTERNAL_RESEARCH.md
 ║                                            ║
 ║  ✅ Code fourni      (main_mqtt_fixed.cpp) ║
 ║  ✅ Docs complète    (8 fichiers)          ║
-║  ✅ Script test      (test_mqtt_fixed.py)  ║
+║  ✅ Script test      (tools/tests/test_mqtt_fixed.py)  ║
 ║  ✅ Guides migration (détaillés)           ║
 ║                                            ║
 ║  Prêt à utiliser maintenant!              ║

@@ -56,7 +56,7 @@
 
 ## FICHIERS MODIFIÉS
 
-[src/main.cpp](src/main.cpp) - Déployé avec:
+[main.cpp](../../src/main.cpp) - Déployé avec:
 - Debug counters (loop_counter, callback_counter, mqtt_reconnects)
 - Enhanced logging dans mqttCallback
 - Status checking avant mqttClient.loop()

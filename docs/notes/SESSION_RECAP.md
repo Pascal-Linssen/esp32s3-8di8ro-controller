@@ -50,7 +50,7 @@ Pins: 4,5,6,7,8,9,10,11  ✓ (une entrée testé = LOW)
 ## 📝 CODE ACTUEL
 
 ### Fichier Principal
-- **Path**: [src/main.cpp](src/main.cpp)
+- **Path**: [main.cpp](../../src/main.cpp)
 - **Lignes**: ~280
 - **Status**: Compile OK, exécute OK, pas de reboot
 

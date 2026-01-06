@@ -212,10 +212,10 @@ APRÈS:
 │  • Vous êtes prêt pour production                  │
 │                                                     │
 │  👉 COMMENCEZ PAR:                                 │
-│     1. Lire INSTALLATION_RAPIDE.md                 │
+│     1. Lire docs/INSTALLATION_RAPIDE.md            │
 │     2. Copier main_mqtt_fixed.cpp → main.cpp       │
 │     3. Compiler & Upload                           │
-│     4. Tester avec test_mqtt_fixed.py              │
+│     4. Tester avec tools/tests/test_mqtt_fixed.py  │
 │     5. Célébrer! 🎉                                │
 │                                                     │
 └─────────────────────────────────────────────────────┘
@@ -225,14 +225,14 @@ APRÈS:
 
 ## 📋 Checklist d'Installation
 
-- [ ] Lire INSTALLATION_RAPIDE.md
+- [ ] Lire docs/INSTALLATION_RAPIDE.md
 - [ ] Copier src/main_mqtt_fixed.cpp → src/main.cpp
 - [ ] Mettre à jour platformio.ini (256dpi/MQTT)
 - [ ] Compiler: pio run
 - [ ] Upload: pio run --target upload
 - [ ] Ouvrir console
 - [ ] Vérifier "MQTT connected"
-- [ ] Lancer test_mqtt_fixed.py
+- [ ] Lancer tools/tests/test_mqtt_fixed.py
 - [ ] Vérifier \"MQTT MESSAGE RECEIVED\"
 - [ ] ✅ TERMINÉ! Callbacks fonctionnent!
 
@@ -243,7 +243,7 @@ APRÈS:
 ║                                                                            ║
 ║          🎉 SOLUTION COMPLÈTE - PRÊTE À UTILISER - 5 MINUTES! 🎉         ║
 ║                                                                            ║
-║   Commencez par: INSTALLATION_RAPIDE.md → SOLUTION_FINALE.md              ║
+║   Commencez par: docs/INSTALLATION_RAPIDE.md → docs/notes/SOLUTION_FINALE.md ║
 ║                                                                            ║
 ║   Résultat garanti: Callbacks MQTT qui fonctionnent! 🚀                   ║
 ║                                                                            ║
@@ -252,4 +252,4 @@ APRÈS:
 
 ---
 
-**Prêt à commencer?** → Ouvrez **INSTALLATION_RAPIDE.md** maintenant! 🚀
+**Prêt à commencer?** → Ouvrez **docs/INSTALLATION_RAPIDE.md** maintenant! 🚀

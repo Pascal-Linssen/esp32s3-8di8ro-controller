@@ -236,7 +236,7 @@ Si vous avez besoin d'aide avec la migration :
 
 1. **Lire** `docs/MIGRATION_GUIDE.md` (guide complet)
 2. **Référence** `src/main_mqtt_fixed.cpp` (code complet et commenté)
-3. **Tester** `test_mqtt_fixed.py` (vérifier que ça marche)
+3. **Tester** `tools/tests/test_mqtt_fixed.py` (vérifier que ça marche)
 4. **Consulter** `docs/MQTT_SOLUTION_ANALYSIS.md` (explications détaillées)
 
 ---

@@ -33,18 +33,18 @@ Migrer vers: 256dpi/arduino-mqtt v2.5.2
 ```
 ✅ src/main_mqtt_fixed.cpp       - Code complet corrigé
 ✅ platformio_mqtt_fixed.ini      - Configuration mise à jour
-✅ test_mqtt_fixed.py            - Script de test
+✅ tools/tests/test_mqtt_fixed.py - Script de test
 ```
 
 ### Documentation Fournie ✅
 ```
-📄 INSTALLATION_RAPIDE.md        - 5 minutes pour installer
-📄 README_MQTT_SOLUTION.md       - Vue d'ensemble
-📄 SOLUTION_SUMMARY.md            - Résumé visuel
+📄 docs/INSTALLATION_RAPIDE.md        - 5 minutes pour installer
+📄 docs/mqtt/README_MQTT_SOLUTION.md  - Vue d'ensemble
+📄 docs/notes/SOLUTION_SUMMARY.md     - Résumé visuel
 📄 docs/MQTT_SOLUTION_ANALYSIS.md - Analyse technique
 📄 docs/MIGRATION_GUIDE.md        - Guide détaillé
 📄 docs/EXTERNAL_RESEARCH.md      - Ressources
-📄 INDEX_SOLUTION.md              - Index de navigation
+📄 INDEX_SOLUTION.md                  - Index de navigation
 ```
 
 ---
@@ -80,7 +80,7 @@ pio run --target upload
 
 ### Étape 6: Tester
 ```bash
-python3 test_mqtt_fixed.py
+python3 tools/tests/test_mqtt_fixed.py
 ```
 
 **Résultat attendu** :
@@ -97,9 +97,9 @@ python3 test_mqtt_fixed.py
 
 | Document | Durée | Contenu |
 |----------|-------|---------|
-| SOLUTION_SUMMARY.md | 3 min | Diagrammes visuels du problème/solution |
-| INSTALLATION_RAPIDE.md | 5 min | Installation étape par étape |
-| README_MQTT_SOLUTION.md | 10 min | Vue d'ensemble complète |
+| docs/notes/SOLUTION_SUMMARY.md | 3 min | Diagrammes visuels du problème/solution |
+| docs/INSTALLATION_RAPIDE.md | 5 min | Installation étape par étape |
+| docs/mqtt/README_MQTT_SOLUTION.md | 10 min | Vue d'ensemble complète |
 | MQTT_SOLUTION_ANALYSIS.md | 20 min | Analyse technique détaillée |
 | MIGRATION_GUIDE.md | 15 min | Changements de code expliqués |
 
@@ -200,7 +200,7 @@ Console série doit afficher:
 ```
 
 ### Test 5: Callbacks
-Exécuter `test_mqtt_fixed.py` puis vérifier:
+Exécuter `tools/tests/test_mqtt_fixed.py` puis vérifier:
 ```
 🎯 MQTT MESSAGE RECEIVED #1!     ← CE MESSAGE DOIT APPARAÎTRE
    Topic: waveshare/relay/cmd
@@ -288,7 +288,7 @@ Vérifier:
 ## 🚀 Prochaines Étapes
 
 ### Immédiat (Maintenant)
-1. Lire INSTALLATION_RAPIDE.md
+1. Lire docs/INSTALLATION_RAPIDE.md
 2. Copier main_mqtt_fixed.cpp vers main.cpp
 3. Mettre à jour platformio.ini
 4. Compiler et tester
@@ -315,7 +315,7 @@ Vérifier:
 | platformio_mqtt_fixed.ini | Référence |
 | docs/MQTT_SOLUTION_ANALYSIS.md | Documentation de la solution |
 | docs/MIGRATION_GUIDE.md | Guide pour futures migrations |
-| test_mqtt_fixed.py | Validation solution |
+| tools/tests/test_mqtt_fixed.py | Validation solution |
 
 ---
 
@@ -353,7 +353,7 @@ La solution `256dpi/arduino-mqtt` est :
 
 **Date**: Session actuelle  
 **Statut**: ✅ COMPLET ET TESTÉ  
-**Prochaine étape**: Lire INSTALLATION_RAPIDE.md  
+**Prochaine étape**: Lire docs/INSTALLATION_RAPIDE.md  
 **Durée totale**: < 10 minutes pour avoir les callbacks qui fonctionnent  
 
 🎯 **Allez-y! Les callbacks vous attendent!** 🎯
